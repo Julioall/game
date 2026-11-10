@@ -1,11 +1,13 @@
 import * as T from 'three';
 import { CHUNK, SPECIES } from '../world/catalog.js';
 import { crownOverlaps } from '../world/audit.js';
-import { chunkKey, chunkObjects } from '../world/chunks.js';
+import { chunkKey } from '../world/chunks.js';
+import { chunkObjects } from '../world/vegetation.js';
 import { clamp, gridSample } from '../world/math.js';
 import { buildingMaterial, makeClock, objectMaterial, shadowMaterial, terrainMaterial, waterMaterial } from './materials.js';
 import { groundShadows, surfaceMeshes } from './terrain.js';
-import { instances, modelBank, structuresMesh } from './models.js';
+import { instances, modelBank } from './vegetation.js';
+import { structuresMesh } from './structures.js';
 
 const viewing = new T.Vector3(1, 1.16, 1);
 const groundPitch = viewing.y / viewing.length();

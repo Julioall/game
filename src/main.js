@@ -74,7 +74,7 @@ function persist() {
 }
 
 function harvest() {
-  const action = state.harvest(selected);
+  const action = state.harvest(selected?.id);
   if (!action) return;
   view.invalidate(action.chunk);
   inventory();

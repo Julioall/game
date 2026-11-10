@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { BIOMES, CHUNK, DEFAULT } from '../src/world/catalog.js';
-import { chunkKey, chunkObjects, indexTowns } from '../src/world/chunks.js';
+import { chunkKey, indexTowns } from '../src/world/chunks.js';
+import { chunkObjects } from '../src/world/vegetation.js';
 import { generate, configuration } from '../src/world/generate.js';
 import { buildable } from '../src/world/settlements.js';
 import { WorldState } from '../src/world/state.js';
@@ -162,9 +163,14 @@ test('harvesting and building are local, cannot double spend, and restore from d
   const objects = chunkObjects(world, index, cx, cz);
   const tree = objects.find(o => o.kind === 'tree' && o.age >= 28), rock = objects.find(o => o.kind === 'rock');
   assert.ok(tree && rock);
-  assert.equal(state.harvest(tree).chunk, chunkKey(tree.x, tree.z));
-  assert.equal(state.harvest(tree), null);
-  assert.ok(state.harvest(rock));
+  const empty = state.snapshot();
+  assert.equal(state.harvest({ ...tree, age: 840 }), null);
+  assert.equal(state.harvest('t:0:0'), null);
+  assert.deepEqual(state.snapshot(), empty);
+  assert.equal(state.revision, 0);
+  assert.equal(state.harvest(tree.id).chunk, chunkKey(tree.x, tree.z));
+  assert.equal(state.harvest(tree.id), null);
+  assert.ok(state.harvest(rock.id));
   assert.ok(state.construct(town.x, town.z).error);
   let lot;
   for (let dz = -15; dz <= 15 && !lot; dz++) for (let dx = -15; dx <= 15 && !lot; dx++) {

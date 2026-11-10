@@ -1,5 +1,6 @@
 import { CHUNK, STRUCTURES, VERSION } from './catalog.js';
-import { chunkKey, chunkObjects, indexTowns } from './chunks.js';
+import { chunkKey, indexTowns } from './chunks.js';
+import { chunkObjects, findResource } from './vegetation.js';
 import { gridSample } from './math.js';
 import { buildable } from './settlements.js';
 import { insideFort, insideFortFootprint } from './fortifications.js';
@@ -26,8 +27,10 @@ export class WorldState {
       inventory: { ...this.inventory } };
   }
 
-  harvest(object) {
-    if (!object || !['tree', 'rock'].includes(object.kind) || this.removed.has(object.id)) return null;
+  harvest(id) {
+    if (this.removed.has(id)) return null;
+    const object = findResource(this.world, this.index, id);
+    if (!object) return null;
     const key = object.kind === 'tree' ? 'wood' : 'stone';
     const amount = key === 'wood' ? 2 + Math.floor(object.age / 28) : 2 + Math.floor(object.scale * 2);
     this.removed.add(object.id);
