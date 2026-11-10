@@ -1,8 +1,10 @@
 # Instruções para agentes
 
-Este repositório começa pela documentação do Kingdom · Atlas Vivo. A etapa atual e a próxima entrega estão em [Protótipo e migração](docs/prototipo-e-migracao.md). Antes de editar regras de jogo, leia o [GDD](docs/gdd.md) e a [arquitetura-alvo](docs/arquitetura-alvo.md). Para mudanças de desempenho, siga [Validação](docs/validacao.md).
+Este repositório começa pela documentação do jogo. A etapa atual e a próxima entrega estão em [Protótipo e migração](docs/prototipo-e-migracao.md). Antes de editar regras de jogo, leia o [GDD](docs/gdd.md) e a [arquitetura-alvo](docs/arquitetura-alvo.md). Para mudanças de desempenho, siga [Validação](docs/validacao.md).
 
 ## Contratos de trabalho
+
+- Use “o jogo” na documentação. Para exemplos de módulos, use nomes genéricos com o prefixo `Game.`, como `Game.Models` e `Game.Components`. Ao descrever a implementação atual, cite os caminhos e identificadores reais.
 
 - Confirme o estado real dos arquivos. Separe o que existe no protótipo, o que foi aprovado como direção e o que ainda é hipótese.
 - Faça alterações pequenas. Preserve sementes, IDs, saves e regras observáveis ou documente a migração e cubra-a com testes. Registre a justificativa de mudanças nos contratos.

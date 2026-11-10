@@ -15,6 +15,8 @@ O núcleo usa dados serializáveis e funciona em testes sem navegador. A apresen
 
 ## Dados e identidade
 
+Exemplos de nomes de módulos usam o prefixo `Game.`. `Game.Models` pode agrupar definições e dados de entidades, e `Game.Components` pode agrupar capacidades reutilizáveis. Esses nomes descrevem responsabilidades e servem como convenção para novos módulos.
+
 - Uma definição de catálogo descreve o tipo. Uma instância tem ID, posição e alterações próprias. Geometria, colisão e navegação de uma construção usam a mesma planta de referência, incluindo vãos, pisos e pontos de acesso.
 - Dados estáticos podem ser derivados da semente. Persistir alterações, inventários, IDs criados e os estados necessários para retomar tarefas. Preservar a relação entre configuração, versão de geração e versão do save. Índices, malhas e filas deriváveis são reconstruídos.
 - Entidades usam capacidades concretas como coletável, inventário, produção e porta. Um tipo pode compartilhar capacidades com outros tipos. Funções de criação cuidam dos invariantes de inicialização.

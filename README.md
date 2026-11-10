@@ -1,4 +1,4 @@
-# Kingdom · Atlas Vivo
+# O jogo
 
 Jogo de simulação medieval em que você vive como um personagem, convive com habitantes autônomos e pode chegar a administrar um povoado ou liderar um reino. As três escalas compartilham o mesmo mundo, seus habitantes e as consequências das decisões.
 

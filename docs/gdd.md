@@ -1,4 +1,4 @@
-# GDD — Kingdom · Atlas Vivo
+# GDD do jogo
 
 ## Visão
 
@@ -6,7 +6,7 @@ Um mundo medieval procedural em que o jogador pode começar como um habitante, e
 
 ## Pilares de design
 
-| Referência | Princípio para o Kingdom | Aplicação |
+| Referência | Princípio para o jogo | Aplicação |
 | --- | --- | --- |
 | The Elder Scrolls V: Skyrim | Liberdade para explorar e descobrir histórias no lugar onde acontecem | Caminhar pelo vale, entrar em uma cabana e conhecer moradores e facções. [Bethesda](https://bethesda.net/en-US/news/the-elder-scrolls-v-skyrim-welcome) |
 | The Sims 3 | Habitantes com necessidades, traços e iniciativa | O lenhador decide entre terminar uma entrega, descansar ou procurar comida. Suas ações usam as mesmas capacidades e regras disponíveis ao jogador. [Richard Evans na GDC](https://www.gdcvault.com/play/1012805/Modeling-Individual-Personalities-in-The) |
