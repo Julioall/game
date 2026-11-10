@@ -15,6 +15,8 @@ O repositório contém o protótipo executável. O mapa permite até 5.000 × 5.
 
 A importação preservou o protótipo em um commit próprio. Os commits seguintes organizaram, em ordem, terreno e água, vegetação e árvores, e construções. O índice das construções considera a área de influência em mais de um chunk e aplica a mesma geometria de ocupação do protótipo. A planta inicial das casas fornece medidas e posição de entrada. Portas jogáveis e navegação interior são o próximo recorte.
 
+O índice de povoados expõe apenas consultas e devolve registros imutáveis separados dos dados de origem. A apresentação consulta as células da grade por índice, sem acesso aos buffers usados pela simulação. A projeção copia apenas os metadados necessários à interface. Ao carregar um save da versão atual, o estado preserva registros válidos, ignora construções inválidas e zera saldos que não sejam inteiros seguros e não negativos. Saves ilegíveis ou de versão desconhecida iniciam um estado vazio.
+
 ## Próximas etapas
 
 1. **Cabana habitável.** Adicionar personagem, superfícies navegáveis, porta e visibilidade do telhado a partir da planta da cabana. Validar entrada, saída, alcance e persistência.

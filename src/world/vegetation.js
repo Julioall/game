@@ -10,6 +10,9 @@ function resourceCoordinate(seed, gx, gz, stream, cell) {
 
 export function chunkObjects(world, townIndex, cx, cz, { resourcesOnly = false } = {}) {
   const { config, stride, ground, distance, biome, slope } = world;
+  const distanceAt = ArrayBuffer.isView(distance) ? i => distance[i] : distance.at;
+  const biomeAt = ArrayBuffer.isView(biome) ? i => biome[i] : biome.at;
+  const slopeAt = ArrayBuffer.isView(slope) ? i => slope[i] : slope.at;
   const { roads, buildings, yards } = townIndex;
   const key = cx + ',' + cz;
   const fields = townIndex.fields.get(key) ?? [], districts = townIndex.districts.get(key) ?? [];
@@ -32,8 +35,9 @@ export function chunkObjects(world, townIndex, cx, cz, { resourcesOnly = false }
       const x = resourceCoordinate(config.seed, gx, gz, 1, gx);
       const z = resourceCoordinate(config.seed, gx, gz, 2, gz);
       if (x < startX || z < startZ || x >= endX || z >= endZ) continue;
-      const i = sample(x, z), land = BIOMES[biome[i]];
-      if (distance[i] < 2 || slope[i] > .66 || !vacant(x, z, 1.4)) continue;
+      const i = sample(x, z), type = biomeAt(i);
+      if (distanceAt(i) < 2 || slopeAt(i) > .66 || !vacant(x, z, 1.4)) continue;
+      const land = BIOMES[type];
       const y = gridSample(ground, stride, x, z);
       if (h(3) < land.density * config.vegetation * 1.33) {
         const species = land.trees[Math.floor(h(4) * land.trees.length)];
@@ -42,7 +46,7 @@ export function chunkObjects(world, townIndex, cx, cz, { resourcesOnly = false }
         const radius = SPECIES[species].radius * scale;
         objects.push({ id: 't:' + gx + ':' + gz, kind: 'tree', x, y, z, species, age, scale, radius,
           variant: Math.floor(h(7) * 5), rotation: h(8) * Math.PI * 2 });
-      } else if (h(9) < (biome[i] === 7 ? .64 : .115)) {
+      } else if (h(9) < (type === 7 ? .64 : .115)) {
         objects.push({ id: 'r:' + gx + ':' + gz, kind: 'rock', x, y, z,
           scale: .38 + h(10) * 1.03, variant: Math.floor(h(11) * 5), rotation: h(12) * Math.PI * 2 });
       }
@@ -61,11 +65,11 @@ export function chunkObjects(world, townIndex, cx, cz, { resourcesOnly = false }
   for (let dz = 0; dz < endZ - startZ; dz++) for (let dx = 0; dx < endX - startX; dx++) {
     const px = startX + dx, pz = startZ + dz;
     const x = px + hash(config.seed, px, pz, 41), z = pz + hash(config.seed, px, pz, 42);
-    const i = sample(x, z);
+    const i = sample(x, z), type = biomeAt(i), shore = distanceAt(i);
     const h = hash(config.seed, px, pz, 43);
-    if (distance[i] === 0 || biome[i] >= 7 && biome[i] <= 9 || slope[i] > .59 ||
+    if (shore === 0 || type >= 7 && type <= 9 || slopeAt(i) > .59 ||
       h > config.vegetation * .36 || !vacant(x, z, .04)) continue;
-    const kind = distance[i] <= 2 ? 'reed' : h < .025 ? 'shrub' : h < .085 ? 'flower' : 'grass';
+    const kind = shore <= 2 ? 'reed' : h < .025 ? 'shrub' : h < .085 ? 'flower' : 'grass';
     objects.push({ id: 'p:' + px + ':' + pz, kind, x, z, y: gridSample(ground, stride, x, z),
       scale: .55 + hash(config.seed, px, pz, 44) * .72,
       variant: Math.floor(hash(config.seed, px, pz, 45) * 5), rotation: h * 87 });

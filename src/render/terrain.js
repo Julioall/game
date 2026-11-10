@@ -24,15 +24,15 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
   const vertices = [];
   let hasWater = false;
   for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
-    const i = z * stride + x, y = ground[i];
-    const dx = (ground[i + (x < stride - 1 ? 1 : 0)] - ground[i - (x > 0 ? 1 : 0)]) / 2;
-    const dz = (ground[i + (z < stride - 1 ? stride : 0)] - ground[i - (z > 0 ? stride : 0)]) / 2;
+    const i = z * stride + x, y = ground.at(i);
+    const dx = (ground.at(i + (x < stride - 1 ? 1 : 0)) - ground.at(i - (x > 0 ? 1 : 0))) / 2;
+    const dz = (ground.at(i + (z < stride - 1 ? stride : 0)) - ground.at(i - (z > 0 ? stride : 0))) / 2;
     const grade = Math.hypot(dx, dz);
-    const base = palette[biome[i] || ((world.raw ?? ground)[i] < 0 ? 1 : 10)].clone();
+    const base = palette[biome.at(i) || ((world.raw ?? ground).at(i) < 0 ? 1 : 10)].clone();
     const seed = hash(config.seed, x, z, 91);
-    if (wet[i] > 0) base.lerp(loam, .44);
-    if (grade > .6 && wet[i] <= 0 && biome[i] !== 9) base.lerp(cliff, clamp((grade - .6) * .84));
-    if (config.style === 'spring' && [2, 3, 4, 10, 11].includes(biome[i])) base.g *= 1.19;
+    if (wet.at(i) > 0) base.lerp(loam, .44);
+    if (grade > .6 && wet.at(i) <= 0 && biome.at(i) !== 9) base.lerp(cliff, clamp((grade - .6) * .84));
+    if (config.style === 'spring' && [2, 3, 4, 10, 11].includes(biome.at(i))) base.g *= 1.19;
     const plot = fields.find(f => Math.abs(f.x - x) <= 2 && Math.abs(f.z - z) <= 2);
     if (plot) base.copy((x - plot.x) % 2 ? fieldDark : fieldLight);
     if (forts.some(bounds => insideFort(bounds, x, z))) base.lerp(courtyard, .77);
@@ -46,8 +46,8 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
     if (light < .79) base.b += (.79 - light) * .09;
     positions.push(x, y, z);
     colors.push(base.r, base.g, base.b);
-    if (wet[i] > 0) hasWater = true;
-    vertices.push({ x, z, y: surface[i], mask: wet[i], depth: Math.max(0, surface[i] - y) });
+    if (wet.at(i) > 0) hasWater = true;
+    vertices.push({ x, z, y: surface.at(i), mask: wet.at(i), depth: Math.max(0, surface.at(i) - y) });
   }
 
   for (let z = 0; z < z1 - z0; z++) for (let x = 0; x < x1 - x0; x++) {
@@ -72,7 +72,7 @@ export function groundShadows(world, objects, material) {
   const positions = [], uvs = [], indices = [];
   for (const o of objects) {
     const radius = o.radius ?? o.footprint ?? (o.kind === 'rock' ? o.scale * .65 : 0);
-    if (radius < .4 || world.slope[Math.round(o.z) * world.stride + Math.round(o.x)] > .36) continue;
+    if (radius < .4 || world.slope.at(Math.round(o.z) * world.stride + Math.round(o.x)) > .36) continue;
     const span = Math.max(1, radius * 1.15) + (o.shadowHeight ?? 0) * .17;
     const shift = o.shadowHeight ? o.shadowHeight * .40 : o.kind === 'tree' ? o.scale * 1.5 : radius * .34;
     const x = o.x + shift, z = o.z + shift * .53, start = positions.length / 3;

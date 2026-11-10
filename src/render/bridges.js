@@ -32,7 +32,7 @@ export function buildBridge(parts, bridge, world) {
   }
   for (let t of [0, 1, length - 1, length]) {
     const x = ax + dx * t, z = az + dz * t, i = Math.round(z) * stride + Math.round(x);
-    const low = Math.min(ground[i] - .16, deck - .34);
+    const low = Math.min(ground.at(i) - .16, deck - .34);
     part(parts, box, '#827b6a', x, (low + deck) / 2 - .06, z, .84, deck - low, 1.82, angle, 0, .16);
   }
 }

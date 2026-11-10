@@ -17,9 +17,9 @@ export function constructionRules(world, townIndex) {
   for (const town of world.towns) {
     for (const building of town.buildings) register(building);
     for (const field of town.fields) register(field, 3.2);
-    if (town.fort) indexBounds(forts, town.fort.bounds, town.fort.bounds, TOWER_DIAMETER / 2 + fortMargin);
-    if (town.palace) indexBounds(palaces, town.palace.bounds, town.palace.bounds, fortMargin + 2);
-    if (town.cityWall) indexBounds(walls, town.cityWall.bounds, town.cityWall.bounds, 3.4);
+    if (town.fort) indexBounds(forts, { ...town.fort.bounds }, town.fort.bounds, TOWER_DIAMETER / 2 + fortMargin);
+    if (town.palace) indexBounds(palaces, { ...town.palace.bounds }, town.palace.bounds, fortMargin + 2);
+    if (town.cityWall) indexBounds(walls, { ...town.cityWall.bounds }, town.cityWall.bounds, 3.4);
   }
 
   function hasResource(x, z, overlaps, isRemoved) {

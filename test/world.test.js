@@ -202,6 +202,47 @@ test('a restored building blocks lots across a chunk boundary', () => {
   assert.match(restored.construct(...lot).error, /Libere espaço/);
   assert.equal(restored.revision, 0);
   assert.deepEqual(restored.snapshot().inventory, inventory);
+
+  const damaged = new WorldState(flat, {
+    version: 1, removed: {}, buildings: {}, inventory: { wood: '3', stone: 'abc' }
+  });
+  assert.match(damaged.construct(...lot).error, /requer/);
+  assert.deepEqual(damaged.snapshot(), { version: 1, removed: [], buildings: [], inventory: { wood: 0, stone: 0 } });
+  assert.equal(damaged.revision, 0);
+
+  const partial = new WorldState(flat, {
+    version: 1, removed: ['t:1:2', 17], buildings: [{ ...building, y: '2' }, building, building],
+    inventory: { wood: 3, stone: -1 }
+  });
+  assert.deepEqual(partial.snapshot(), { version: 1, removed: ['t:1:2'], buildings: [building],
+    inventory: { wood: 3, stone: 0 } });
+  assert.deepEqual(new WorldState(flat, { version: 99, inventory }).snapshot(), damaged.snapshot());
+});
+
+test('the renderer receives a read-only town index and detached building records', () => {
+  const state = new WorldState(world);
+  const { index, world: view } = state.presentation();
+  assert.equal(index.roads.add, undefined);
+  assert.throws(() => { index.roads.has = () => false; }, TypeError);
+  const building = world.towns.flatMap(town => town.buildings)[0];
+  const bucket = index.buildings.get(chunkKey(building.x, building.z));
+  const record = bucket.find(candidate => candidate.id === building.id);
+  assert.notEqual(record, building);
+  assert.throws(() => bucket.pop(), TypeError);
+  assert.throws(() => { record.footprint = 0; }, TypeError);
+  const inventory = state.inventory;
+  inventory.wood = 100;
+  assert.equal(state.inventory.wood, 0);
+  assert.equal(view.ground.buffer, undefined);
+  assert.throws(() => { view.distance[0] = 0; }, TypeError);
+  assert.throws(() => { view.ground.at = () => 100; }, TypeError);
+  assert.throws(() => { view.config.seed = 0; }, TypeError);
+  assert.throws(() => { view.towns[0].x = 0; }, TypeError);
+  const { x, z } = view.towns[0];
+  assert.equal(gridSample(view.ground, view.stride, x + .2, z + .7),
+    gridSample(world.ground, world.stride, x + .2, z + .7));
+  const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
+  assert.deepEqual(chunkObjects(view, index, cx, cz), chunkObjects(world, index, cx, cz));
 });
 
 test('extreme configuration disables optional features and supports the stress extent', () => {

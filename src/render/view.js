@@ -20,7 +20,8 @@ function dispose(mesh) {
 }
 
 export class WorldView {
-  constructor(canvas, world, projection) {
+  constructor(canvas, projection) {
+    const { world } = projection;
     this.canvas = canvas;
     this.world = world;
     this.projection = projection;

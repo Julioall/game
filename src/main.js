@@ -6,7 +6,6 @@ import { WorldState } from './world/state.js';
 import { WorldView } from './render/view.js';
 import { loadSave, storeSave } from './platform/local-save.js';
 import { mapImage, paintMap } from './ui/map.js';
-import { worldLandmarks } from './world/landmarks.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('world'), map = $('map'), dialog = $('generator'), form = $('config');
@@ -27,8 +26,9 @@ function message(text) {
 }
 
 function inventory() {
-  $('wood').textContent = state.inventory.wood;
-  $('stone').textContent = state.inventory.stone;
+  const { wood, stone } = state.inventory;
+  $('wood').textContent = wood;
+  $('stone').textContent = stone;
 }
 
 function setBuilding(enabled) {
@@ -60,8 +60,8 @@ function inspect(object, point) {
   } else {
     const { world } = view;
     const i = Math.round(point.z) * world.stride + Math.round(point.x);
-    title.textContent = BIOMES[world.biome[i] ?? 0].name;
-    description.textContent = 'Altitude ' + point.y.toFixed(1) + ' m · declive ' + Math.round((world.slope[i] ?? 0) * 100) + '%';
+    title.textContent = BIOMES[world.biome.at(i) ?? 0].name;
+    description.textContent = 'Altitude ' + point.y.toFixed(1) + ' m · declive ' + Math.round((world.slope.at(i) ?? 0) * 100) + '%';
   }
 }
 
@@ -120,7 +120,7 @@ function showRegion() {
     ? focus.x >= t.cityWall.bounds.minX && focus.x <= t.cityWall.bounds.maxX &&
       focus.z >= t.cityWall.bounds.minZ && focus.z <= t.cityWall.bounds.maxZ
     : Math.hypot(t.x - focus.x, t.z - focus.z) < (t.fort ? 22 : 16));
-  const realm = world.realms.find(r => r.id === (town?.realm ?? world.territory[i]));
+  const realm = world.realms.find(r => r.id === (town?.realm ?? world.territory.at(i)));
   const type = town?.cityWall ? 'Grande cidade' : town?.fort ? 'Castelo nobre' : town?.kind === 'manor' ? 'Solar fortificado' : 'Vila';
   const title = town ? town.name + ' · ' + type : realm?.name ?? 'Terras de fronteira';
   $('region').textContent = title;
@@ -158,16 +158,18 @@ function loadWorld(config) {
       return;
     }
     try {
-      const world = data.world;
+      const generated = data.world;
+      state = new WorldState(generated, loadSave(generated.config));
+      const presentation = state.presentation();
+      const { world } = presentation;
       current = world.config;
-      state = new WorldState(world, loadSave(current));
       view?.destroy();
       view = null;
-      view = new WorldView(canvas, world, state.presentation());
+      view = new WorldView(canvas, presentation);
       view.showWalkways($('walkways').getAttribute('aria-pressed') === 'true');
       lostContext = false;
       inventory();
-      places = worldLandmarks(world);
+      places = world.landmarks;
       image = mapImage(map, world, $('layer').value);
       $('lake').disabled = !places.lake;
       $('home').disabled = !world.towns.length;
@@ -374,8 +376,8 @@ if (new URLSearchParams(location.search).has('qa')) {
     focus: () => ({ ...view.focus }), go: (x, z, span) => view.go(x, z, span),
     state: () => state.snapshot(), world: () => view.world.config,
     walkway: id => view.world.towns[id]?.fort?.walkway,
-    settlements: () => view.world.towns.map(({ id, kind, name, realm, x, z, fort, cityWall, buildings }) =>
-      ({ id, kind, name, realm, x, z, gate: fort?.gate, metropolis: Boolean(cityWall), buildings: buildings.length })),
+    settlements: () => view.world.towns.map(({ id, kind, name, realm, x, z, fort, cityWall, buildingCount }) =>
+      ({ id, kind, name, realm, x, z, gate: fort?.gate, metropolis: Boolean(cityWall), buildings: buildingCount })),
     project(x, y, z) {
       point.set(x, y, z).project(view.camera);
       return { x: (point.x + 1) * canvas.clientWidth / 2, y: (1 - point.y) * canvas.clientHeight / 2 };
@@ -391,7 +393,7 @@ if (new URLSearchParams(location.search).has('qa')) {
         const x = Math.round(focus.x) + dx, z = Math.round(focus.z) + dz;
         if (x < 2 || z < 2 || x >= world.config.size - 2 || z >= world.config.size - 2) continue;
         if (state.placement(x, z)) continue;
-        lots.push({ x, z, screen: this.project(x, world.ground[z * world.stride + x], z) });
+        lots.push({ x, z, screen: this.project(x, world.ground.at(z * world.stride + x), z) });
       }
       return lots;
     }

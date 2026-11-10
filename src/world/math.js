@@ -23,7 +23,13 @@ export function gridSample(field, stride, x, z) {
   const ix = Math.floor(x), iz = Math.floor(z);
   const u = x - ix, v = z - iz, i = iz * stride + ix;
   // Matches the diagonal in the terrain mesh and in the shore clipping pass.
-  if (u + v <= 1) return field[i] + u * (field[i + 1] - field[i]) + v * (field[i + stride] - field[i]);
-  const d = field[i + stride + 1];
-  return d + (1 - u) * (field[i + stride] - d) + (1 - v) * (field[i + 1] - d);
+  const read = ArrayBuffer.isView(field) || Array.isArray(field) ? null : field.at;
+  const east = read ? read(i + 1) : field[i + 1];
+  const south = read ? read(i + stride) : field[i + stride];
+  if (u + v <= 1) {
+    const origin = read ? read(i) : field[i];
+    return origin + u * (east - origin) + v * (south - origin);
+  }
+  const d = read ? read(i + stride + 1) : field[i + stride + 1];
+  return d + (1 - u) * (south - d) + (1 - v) * (east - d);
 }

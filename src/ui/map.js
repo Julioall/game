@@ -14,16 +14,16 @@ export function mapImage(canvas, world, layer) {
     const gx = Math.floor((x + .5) * (stride - 1) / image.width);
     const gz = Math.floor((z + .5) * (stride - 1) / image.height);
     const i = gz * stride + gx, p = (z * image.width + x) * 4;
-    let rgb = colors[biome[i]];
-    if (layer === 'realm' && territory[i]) {
-      const faction = realmColors.get(territory[i]);
-      const border = [i + 1, i + stride].some(j => territory[j] && territory[j] !== territory[i]);
+    let rgb = colors[biome.at(i)];
+    if (layer === 'realm' && territory.at(i)) {
+      const faction = realmColors.get(territory.at(i));
+      const border = [i + 1, i + stride].some(j => territory.at(j) && territory.at(j) !== territory.at(i));
       rgb = rgb.map((value, k) => border ? Math.min(255, faction[k] * .75 + 54) : value * .42 + faction[k] * .58);
-    } else if (layer === 'water') rgb = river[i] ? [136, 232, 208] : lake[i] ? [50, 151, 172] :
-      wet[i] > 0 ? [33, 86, 105] : [93 + ground[i] * 2, 108 + ground[i] * 2, 83 + ground[i] * 2];
-    else if (layer === 'slope' && wet[i] <= 0) rgb = slope[i] < .31 ? [81, 119, 81] :
-      slope[i] < .62 ? [189, 154, 78] : [154, 84, 67];
-    const shade = 1 - Math.max(-.1, Math.min(.27, (ground[i + 1] - ground[i]) * .15));
+    } else if (layer === 'water') rgb = river.at(i) ? [136, 232, 208] : lake.at(i) ? [50, 151, 172] :
+      wet.at(i) > 0 ? [33, 86, 105] : [93 + ground.at(i) * 2, 108 + ground.at(i) * 2, 83 + ground.at(i) * 2];
+    else if (layer === 'slope' && wet.at(i) <= 0) rgb = slope.at(i) < .31 ? [81, 119, 81] :
+      slope.at(i) < .62 ? [189, 154, 78] : [154, 84, 67];
+    const shade = 1 - Math.max(-.1, Math.min(.27, (ground.at(i + 1) - ground.at(i)) * .15));
     pixels.data.set([rgb[0] * shade, rgb[1] * shade, rgb[2] * shade, 255], p);
   }
   ctx.putImageData(pixels, 0, 0);
