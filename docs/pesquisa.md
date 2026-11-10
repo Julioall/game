@@ -22,4 +22,4 @@ Os sete repositórios foram clonados e inspecionados antes da implementação. A
 
 ## Atribuição
 
-A distribuição carrega as licenças de Mapgen4, Pixel Plays, Three.js, simplex-noise e FlatQueue em `public/third-party/`. O cabeçalho de `src/world/drainage.js` identifica a adaptação. Kinstead, TopoTopo, Azgaar e WFC TypeScript foram referências de pesquisa, sem código ou assets incorporados. Vite e Playwright são ferramentas de desenvolvimento.
+A distribuição carrega as licenças de Mapgen4, Pixel Plays, Three.js, simplex-noise e FlatQueue em `public/third-party/`. O cabeçalho de `src/world/terrain/drainage.js` identifica a adaptação. Kinstead, TopoTopo, Azgaar e WFC TypeScript foram referências de pesquisa, sem código ou assets incorporados. Vite e Playwright são ferramentas de desenvolvimento.

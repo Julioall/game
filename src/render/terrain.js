@@ -2,6 +2,7 @@ import * as T from 'three';
 import { BIOMES, CHUNK } from '../world/catalog.js';
 import { clamp, gridSample, hash } from '../world/math.js';
 import { insideFort } from '../world/fortifications.js';
+import { waterMesh } from './water.js';
 
 const palette = BIOMES.map(b => new T.Color(b.color));
 const loam = new T.Color('#a58755');
@@ -17,10 +18,10 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
   const { roads, paved, fields } = index;
   const forts = index.yards.get(cx + ',' + cz) ?? [];
   const positions = [], colors = [], triangles = [];
-  const water = [], depth = [], banks = [];
   const x0 = cx * CHUNK, z0 = cz * CHUNK;
   const x1 = Math.min(config.size, x0 + CHUNK), z1 = Math.min(config.size, z0 + CHUNK), side = x1 - x0 + 1;
   const vertices = [];
+  let hasWater = false;
   for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
     const i = z * stride + x, y = ground[i];
     const dx = (ground[i + (x < stride - 1 ? 1 : 0)] - ground[i - (x > 0 ? 1 : 0)]) / 2;
@@ -44,36 +45,13 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
     if (light < .79) base.b += (.79 - light) * .09;
     positions.push(x, y, z);
     colors.push(base.r, base.g, base.b);
+    if (wet[i] > 0) hasWater = true;
     vertices.push({ x, z, y: surface[i], mask: wet[i], depth: Math.max(0, surface[i] - y) });
-  }
-
-  function clipWater(a, b, c) {
-    if (a.mask <= 0 && b.mask <= 0 && c.mask <= 0) return;
-    const clipped = [];
-    let prev = c;
-    for (const vertex of [a, b, c]) {
-      if ((prev.mask > 0) !== (vertex.mask > 0)) {
-        const t = prev.mask / (prev.mask - vertex.mask);
-        const x = prev.x + (vertex.x - prev.x) * t, z = prev.z + (vertex.z - prev.z) * t;
-        clipped.push({ x, z, y: gridSample(ground, stride, x, z), mask: 0, depth: 0 });
-      }
-      if (vertex.mask > 0) clipped.push(vertex);
-      prev = vertex;
-    }
-    for (let i = 1; i + 1 < clipped.length; i++) {
-      for (const vertex of [clipped[0], clipped[i], clipped[i + 1]]) {
-        water.push(vertex.x, vertex.y + .047, vertex.z);
-        depth.push(vertex.depth);
-        banks.push(vertex.mask);
-      }
-    }
   }
 
   for (let z = 0; z < z1 - z0; z++) for (let x = 0; x < x1 - x0; x++) {
     const a = z * side + x, b = a + side;
     triangles.push(a, b, a + 1, a + 1, b, b + 1);
-    clipWater(vertices[a], vertices[b], vertices[a + 1]);
-    clipWater(vertices[a + 1], vertices[b], vertices[b + 1]);
   }
 
   const terrain = new T.BufferGeometry();
@@ -84,15 +62,8 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
   const land = new T.Mesh(terrain, materials.terrain);
   land.receiveShadow = true;
   const meshes = [land];
-  if (water.length) {
-    const geometry = new T.BufferGeometry();
-    geometry.setAttribute('position', new T.Float32BufferAttribute(water, 3));
-    geometry.setAttribute('waterDepth', new T.Float32BufferAttribute(depth, 1));
-    geometry.setAttribute('bank', new T.Float32BufferAttribute(banks, 1));
-    const stream = new T.Mesh(geometry, materials.water);
-    stream.receiveShadow = true;
-    meshes.push(stream);
-  }
+  const water = hasWater ? waterMesh(world, vertices, triangles, materials.water) : null;
+  if (water) meshes.push(water);
   return meshes;
 }
 

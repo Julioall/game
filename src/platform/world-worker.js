@@ -1,4 +1,4 @@
-import { configuration, generate } from './generate.js';
+import { configuration, generate } from '../world/generate.js';
 
 self.onmessage = ({ data }) => {
   try {

@@ -141,7 +141,7 @@ function loadWorld(config) {
   $('loading').hidden = false;
   $('loading').querySelector('p').textContent = 'Traçando os rios e o relevo';
   $('region').textContent = 'Cartografando o mundo…';
-  worker = new Worker(new URL('./world/worker.js', import.meta.url), { type: 'module' });
+  worker = new Worker(new URL('./platform/world-worker.js', import.meta.url), { type: 'module' });
   const active = worker;
   active.onerror = event => {
     $('loading').querySelector('p').textContent = 'Falha ao gerar o mapa. ' + event.message;

@@ -1,6 +1,6 @@
 import FlatQueue from 'flatqueue';
 import { STRUCTURES } from './catalog.js';
-import { DX, DZ } from './drainage.js';
+import { DX, DZ } from './terrain/drainage.js';
 import { hash, gridSample } from './math.js';
 import { fortSite, insideFort, makeFort, realmIdentity, townName } from './fortifications.js';
 import { bridgeWalkway, layFortWalkway } from './walkways.js';
