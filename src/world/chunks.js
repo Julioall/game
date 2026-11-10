@@ -2,34 +2,40 @@ import { CHUNK } from './catalog.js';
 
 export const chunkKey = (x, z) => Math.floor(x / CHUNK) + ',' + Math.floor(z / CHUNK);
 
+export function addToChunk(index, key, value) {
+  if (!index.has(key)) index.set(key, []);
+  index.get(key).push(value);
+}
+
+export function indexBounds(index, value, { minX, maxX, minZ, maxZ }, margin = 0) {
+  for (let cz = Math.floor((minZ - margin) / CHUNK); cz <= Math.floor((maxZ + margin) / CHUNK); cz++) {
+    for (let cx = Math.floor((minX - margin) / CHUNK); cx <= Math.floor((maxX + margin) / CHUNK); cx++) {
+      addToChunk(index, cx + ',' + cz, value);
+    }
+  }
+}
+
 export function indexTowns(world) {
-  const roads = new Set(), paved = new Set(), buildings = new Map(), defenses = new Map(), yards = new Map(), fields = [];
-  const districts = [];
-  const add = (map, key, item) => {
-    if (!map.has(key)) map.set(key, []);
-    map.get(key).push(item);
-  };
+  const roads = new Set(), paved = new Set(), buildings = new Map(), defenses = new Map(), yards = new Map();
+  const fields = new Map(), districts = new Map();
   for (const town of world.towns) {
     for (const r of town.roads) roads.add(r);
     for (const r of town.paved ?? []) paved.add(r);
     for (const building of town.buildings) {
       const key = chunkKey(building.x, building.z);
-      add(buildings, key, building);
+      addToChunk(buildings, key, building);
     }
-    fields.push(...town.fields);
+    for (const field of town.fields) {
+      indexBounds(fields, field, { minX: field.x, maxX: field.x, minZ: field.z, maxZ: field.z }, 4.1);
+    }
     if (town.cityWall) {
-      districts.push(town.cityWall.bounds);
-      for (const piece of town.cityWall.pieces) add(defenses, chunkKey(piece.x, piece.z), piece);
-      add(defenses, chunkKey(town.palace.x, town.palace.z), town.palace);
+      indexBounds(districts, town.cityWall.bounds, town.cityWall.bounds, 3.54);
+      for (const piece of town.cityWall.pieces) addToChunk(defenses, chunkKey(piece.x, piece.z), piece);
+      addToChunk(defenses, chunkKey(town.palace.x, town.palace.z), town.palace);
     }
     if (!town.fort) continue;
-    for (const piece of town.fort.pieces) add(defenses, chunkKey(piece.x, piece.z), piece);
-    const { bounds } = town.fort;
-    for (let cz = Math.floor((bounds.minZ - 4) / CHUNK); cz <= Math.floor((bounds.maxZ + 4) / CHUNK); cz++) {
-      for (let cx = Math.floor((bounds.minX - 4) / CHUNK); cx <= Math.floor((bounds.maxX + 4) / CHUNK); cx++) {
-        add(yards, cx + ',' + cz, bounds);
-      }
-    }
+    for (const piece of town.fort.pieces) addToChunk(defenses, chunkKey(piece.x, piece.z), piece);
+    indexBounds(yards, town.fort.bounds, town.fort.bounds, 4);
   }
-  return { roads, paved, buildings, defenses, yards, fields, districts, allBuildings: [...buildings.values()].flat() };
+  return { roads, paved, buildings, defenses, yards, fields, districts };
 }

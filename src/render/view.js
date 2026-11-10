@@ -20,11 +20,11 @@ function dispose(mesh) {
 }
 
 export class WorldView {
-  constructor(canvas, world, state) {
+  constructor(canvas, world, projection) {
     this.canvas = canvas;
     this.world = world;
-    this.state = state;
-    this.index = state.index;
+    this.projection = projection;
+    this.index = projection.index;
     this.scene = new T.Scene();
     this.scene.background = new T.Color('#233e40');
     this.scene.fog = new T.Fog('#77948b', 250, 403);
@@ -172,8 +172,8 @@ export class WorldView {
       chunk.group.remove(mesh);
       dispose(mesh);
     }
-    const natural = chunk.objects.filter(o => !this.state.removed.has(o.id));
-    const buildings = [...(this.index.buildings.get(entry.key) ?? []), ...(this.state.built.get(entry.key) ?? [])];
+    const natural = chunk.objects.filter(o => !this.projection.isRemoved(o.id));
+    const buildings = [...(this.index.buildings.get(entry.key) ?? []), ...this.projection.buildingsAt(entry.key)];
     const objects = instances(natural, this.bank, this.materials, entry.distant);
     const forts = this.index.defenses.get(entry.key) ?? [];
     const structures = structuresMesh(buildings, this.bridges.get(entry.key) ?? [], forts, this.world, this.materials.houses);
@@ -275,7 +275,7 @@ export class WorldView {
     const terrain = this.ray.intersectObjects(active.flatMap(c => c.surfaces), false)[0];
     let bestDistance = terrain?.distance ?? Infinity, hit = null;
     if (objects) for (const chunk of active) for (const o of chunk.objects) {
-      if (!['tree', 'rock'].includes(o.kind) || this.state.removed.has(o.id)) continue;
+      if (!['tree', 'rock'].includes(o.kind) || this.projection.isRemoved(o.id)) continue;
       const y = o.kind === 'tree' ? SPECIES[o.species].height * o.scale * .70 : o.scale * .42;
       const radius = o.kind === 'tree' ? Math.max(.55, o.radius * .85) : o.scale * .62;
       point.set(o.x, o.y + y, o.z);
@@ -294,7 +294,7 @@ export class WorldView {
   diagnostics() {
     const render = this.renderer.info.render, memory = this.renderer.info.memory;
     const objects = this.near.flatMap(c => this.chunks.get(c.key)?.objects ?? [])
-      .filter(o => !this.state.removed.has(o.id));
+      .filter(o => !this.projection.isRemoved(o.id));
     return { active: this.near.filter(c => this.chunks.has(c.key)).length, desired: this.near.length,
       cached: this.chunks.size, calls: render.calls, triangles: render.triangles,
       geometries: memory.geometries, chunkMs: this.lastChunkMs, maxChunkMs: this.maxChunkMs, objects: objects.length,

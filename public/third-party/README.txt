@@ -1,4 +1,4 @@
-Kingdom · Atlas Vivo — Third-party notices
+Third-party notices
 
 Mapgen4
 Copyright 2018 Red Blob Games <redblobgames@gmail.com>

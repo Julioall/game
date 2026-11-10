@@ -163,7 +163,7 @@ function loadWorld(config) {
       state = new WorldState(world, loadSave(current));
       view?.destroy();
       view = null;
-      view = new WorldView(canvas, world, state);
+      view = new WorldView(canvas, world, state.presentation());
       view.showWalkways($('walkways').getAttribute('aria-pressed') === 'true');
       lostContext = false;
       inventory();
@@ -382,7 +382,7 @@ if (new URLSearchParams(location.search).has('qa')) {
     },
     targets(kind) {
       return [...view.chunks.values()].filter(c => c.group.visible).flatMap(c => c.objects)
-        .filter(o => o.kind === kind && !state.removed.has(o.id))
+        .filter(o => o.kind === kind && !state.isRemoved(o.id))
         .map(o => ({ ...o, screen: this.project(o.x, o.y + (o.kind === 'tree' ? SPECIES[o.species].height * o.scale * .7 : o.scale * .42), o.z) }));
     },
     lots() {

@@ -1,5 +1,5 @@
 {
-  "name": "kingdom-world-generator",
+  "name": "game",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test",
-    "playtest": "node tools/playtest.mjs"
+    "playtest": "node tools/playtest.mjs",
+    "benchmark:placement": "node tools/benchmark-placement.mjs"
   },
   "dependencies": {
     "flatqueue": "2.0.3",

@@ -15,8 +15,9 @@ const fieldLight = new T.Color('#9f803e');
 
 export function surfaceMeshes(world, index, cx, cz, materials) {
   const { stride, wet, surface, ground, biome, config } = world;
-  const { roads, paved, fields } = index;
-  const forts = index.yards.get(cx + ',' + cz) ?? [];
+  const { roads, paved } = index;
+  const key = cx + ',' + cz;
+  const forts = index.yards.get(key) ?? [], fields = index.fields.get(key) ?? [];
   const positions = [], colors = [], triangles = [];
   const x0 = cx * CHUNK, z0 = cz * CHUNK;
   const x1 = Math.min(config.size, x0 + CHUNK), z1 = Math.min(config.size, z0 + CHUNK), side = x1 - x0 + 1;

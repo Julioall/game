@@ -5,7 +5,7 @@ import { BIOMES, CHUNK, DEFAULT } from '../src/world/catalog.js';
 import { chunkKey, indexTowns } from '../src/world/chunks.js';
 import { chunkObjects } from '../src/world/vegetation.js';
 import { generate, configuration } from '../src/world/generate.js';
-import { buildable } from '../src/world/settlements.js';
+import { buildable } from '../src/world/terrain/placement.js';
 import { WorldState } from '../src/world/state.js';
 import { gridSample } from '../src/world/math.js';
 import { crownOverlaps } from '../src/world/audit.js';
@@ -186,6 +186,22 @@ test('harvesting and building are local, cannot double spend, and restore from d
   assert.match(restored.construct(...lot).error, /Libere espaço/);
   assert.deepEqual(restored.snapshot(), snapshot);
   assert.equal(fingerprint(world), before);
+});
+
+test('a restored building blocks lots across a chunk boundary', () => {
+  const size = CHUNK * 4, stride = size + 1;
+  const flat = { config: { size, seed: 1769, vegetation: 0 }, stride, towns: [],
+    ground: new Float32Array(stride ** 2).fill(2), distance: new Uint8Array(stride ** 2).fill(4),
+    slope: new Float32Array(stride ** 2), biome: new Uint8Array(stride ** 2).fill(2) };
+  const inventory = { wood: 3, stone: 2 };
+  const building = { id: 'c:32.50:32.50', kind: 'cabin', x: CHUNK + .5, y: 2, z: CHUNK + .5, footprint: 2.1 };
+  const lot = [CHUNK - 1, CHUNK - 1];
+  assert.equal(new WorldState(flat, { inventory }).placement(...lot), '');
+  const restored = new WorldState(flat, { inventory, buildings: [building] });
+  assert.match(restored.placement(...lot), /Libere espaço/);
+  assert.match(restored.construct(...lot).error, /Libere espaço/);
+  assert.equal(restored.revision, 0);
+  assert.deepEqual(restored.snapshot().inventory, inventory);
 });
 
 test('extreme configuration disables optional features and supports the stress extent', () => {

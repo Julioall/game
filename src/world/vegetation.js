@@ -10,12 +10,14 @@ function resourceCoordinate(seed, gx, gz, stream, cell) {
 
 export function chunkObjects(world, townIndex, cx, cz, { resourcesOnly = false } = {}) {
   const { config, stride, ground, distance, biome, slope } = world;
-  const { roads, buildings, yards, fields, districts } = townIndex;
+  const { roads, buildings, yards } = townIndex;
+  const key = cx + ',' + cz;
+  const fields = townIndex.fields.get(key) ?? [], districts = townIndex.districts.get(key) ?? [];
   const nearby = [];
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
     nearby.push(...(buildings.get((cx + dx) + ',' + (cz + dz)) ?? []));
   }
-  const forts = yards.get(cx + ',' + cz) ?? [];
+  const forts = yards.get(key) ?? [];
   const objects = [], startX = cx * CHUNK, startZ = cz * CHUNK;
   const endX = Math.min(config.size, startX + CHUNK), endZ = Math.min(config.size, startZ + CHUNK);
   const sample = (x, z) => Math.round(z) * stride + Math.round(x);

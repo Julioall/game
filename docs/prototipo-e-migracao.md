@@ -1,32 +1,30 @@
 # Protótipo e migração
 
-## Estado da primeira publicação
+## Estado atual
 
-O repositório começa com design e arquitetura. O código do protótipo está no espaço de trabalho local de origem. As pastas abaixo descrevem esse protótipo e passam a existir no repositório quando forem importadas.
+O repositório contém o protótipo executável. O mapa permite até 5.000 × 5.000 m. Há vilas, solares, castelos e grandes cidades. A câmera livre permite navegar, inspecionar o terreno, coletar madeira e pedra e construir uma cabana. A coleta e a construção persistem por configuração no navegador.
 
-| Caminho local | Estado auditado |
+| Área | Implementação |
 | --- | --- |
-| `src/world/` | Terreno, hidrografia, biomas, assentamentos, reinos, defesas, geração de recursos por chunk e regras de coleta e construção |
-| `src/render/` | Three.js e WebGL 2, câmera livre, cache visual, instâncias, sombras e modelos procedurais de casas, pontes e castelos |
-| `src/ui/`, `src/main.js` | Minimapa, seleção, interface DOM, comandos atuais e integração com a câmera |
-| `src/platform/local-save.js` | Save local por configuração, com inventário, recursos removidos e construções novas |
-| `test/world.test.js`, `tools/playtest.mjs` | Testes do mundo e teste de navegador com geração, câmera, coleta, cabana, recarga e interface móvel |
-| `docs/`, `public/third-party/` | Pesquisa, evidências locais e avisos de terceiros a revisar na importação |
+| Terreno e água | `src/world/terrain/` separa relevo, hidrologia, drenagem e validação de solo. `src/world/generate.js` orquestra a geração. `src/render/terrain.js` gera a malha do terreno e `src/render/water.js` recorta a água nos mesmos triângulos. |
+| Vegetação e árvores | `src/world/ecology.js` classifica biomas. `src/world/vegetation.js` gera recursos e plantas por chunk, com IDs derivados da semente e das coordenadas globais. `src/render/vegetation.js` monta os modelos e as instâncias. A coleta resolve o alvo no mundo pelo ID. |
+| Construções | `src/world/construction.js` valida lotes com índices locais e `src/world/buildings.js` fornece dimensões, fundação e referência de entrada das casas. `src/render/structures.js` compõe a malha de construções com os módulos de casas, pontes e fortificações. |
+| Estado e apresentação | `src/world/state.js` aplica coleta e construção, mantém os deltas e fornece consultas de leitura para a visualização. `src/render/view.js` cuida da câmera, chunks visíveis e seleção. `src/main.js` conecta interface, plataforma e regras. |
+| Plataforma | `src/platform/world-worker.js` gera e transfere o mundo, depois encerra. `src/platform/local-save.js` usa a mesma chave e o mesmo formato de save do protótipo de origem. |
+| Testes e pesquisa | `test/world.test.js` cobre geração, ocupação e persistência. `tools/playtest.mjs` percorre o jogo no navegador. [Pesquisa e atribuições](pesquisa.md) registra referências e licenças. |
 
-O mapa permite até 5.000 × 5.000 m. Há vilas, solares, castelos e grandes cidades. Casas têm geometria própria e palha nas áreas rurais. Coleta e cabana funcionam com câmera livre. Personagens controláveis, interiores, economia autônoma e combate pertencem ao plano. O Worker atual gera o mundo e encerra após transferir o resultado.
+A importação preservou o protótipo em um commit próprio. Os commits seguintes organizaram, em ordem, terreno e água, vegetação e árvores, e construções. O índice das construções considera a área de influência em mais de um chunk e aplica a mesma geometria de ocupação do protótipo. A planta inicial das casas fornece medidas e posição de entrada. Portas jogáveis e navegação interior são o próximo recorte.
 
-## Sequência de importação
+## Próximas etapas
 
-1. **Inventariar o protótipo e registrar a linha de base.** Reexecutar os testes locais. Registrar sementes, saves, controles e resultados antes de alterar módulos. Confirmar dependências, avisos e atribuições. Separar artefatos de teste e builds dos arquivos de origem.
-2. **Importar um recorte executável.** Incorporar código, manifesto, lockfile, assets usados, testes e avisos em um commit verificável. Preservar o protótipo até a importação ter paridade. Classificar diferenças entre a implementação e a arquitetura-alvo.
-3. **Migrar consulta de ocupação e comandos.** Indexar construções, campos e defesas por área, mantendo as decisões de lote. Resolver coleta por identidade autoritativa. Preservar saves e verificar débito, ocupação e concorrência lógica. Conferir [critérios de validação](validacao.md).
-4. **Entregar a cabana habitável.** Adicionar personagem, planta navegável, porta e visibilidade do telhado com uma referência espacial comum. Validar entrada, saída, alcance e persistência.
-5. **Testar autonomia e escalar por evidência.** Introduzir uma tarefa de coleta com reserva, cancelamento e execução. Comparar o custo por atividade antes de escolher ECS completo ou um Worker de simulação.
+1. **Cabana habitável.** Adicionar personagem, superfícies navegáveis, porta e visibilidade do telhado a partir da planta da cabana. Validar entrada, saída, alcance e persistência.
+2. **Tarefa autônoma.** Introduzir coleta com deslocamento, reserva e cancelamento. Usar as mesmas regras de coleta para o jogador e os habitantes.
+3. **Escala de simulação.** Medir tempo por sistema, custo de navegação e quantidade de entidades ativas antes de escolher ECS completo ou um Worker de simulação. Usar os [critérios de validação](validacao.md).
 
-Cada etapa termina com uma demonstração verificável. Atualize este inventário quando o código entrar e marque claramente os sistemas implementados. Uma mudança de ID, geração ou schema exige plano de compatibilidade e teste de saves anteriores.
+Uma mudança de ID, versão de geração ou esquema de save exige plano de compatibilidade e teste de saves anteriores.
 
-## Executar depois que o código estiver presente
+## Executar e verificar
 
-Use Node.js 24 e um navegador WebGL 2. Na pasta do protótipo, rode `npm ci` e `npm run dev -- --port 5917`. Abra [o servidor local](http://127.0.0.1:5917/). A semente 1769 abre a vila com ponte. Para validação, use `npm test`, `npm run build` e `npm run playtest`. O teste usa Chrome instalado, ou Edge com `KINGDOM_BROWSER=msedge`. A variável `KINGDOM_URL` permite usar um servidor já aberto. Os relatórios ficam em `playtest-output/`.
+Use Node.js 24 e um navegador com WebGL 2. Rode `npm ci` e `npm run dev -- --port 5917`. Abra [o servidor local](http://127.0.0.1:5917/). A semente 1769 abre a vila com ponte.
 
-A inspeção anterior encontrou oito testes passando. Isso é evidência sobre o protótipo de origem. Repita a verificação na cópia importada.
+Use `npm test`, `npm run build`, `npm run playtest` e `npm run benchmark:placement`. O playtest usa Chrome instalado ou Edge com `KINGDOM_BROWSER=msedge`. A variável `KINGDOM_URL` permite usar um servidor já aberto. Os relatórios ficam em `playtest-output/`.

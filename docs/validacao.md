@@ -2,9 +2,11 @@
 
 ## Linha de base conhecida
 
-Na auditoria local, oito testes passaram. O teste existente no navegador mede geração e renderização, incluindo FPS, tempo de quadro e streaming. Ainda não há carga de personagens para medir desempenho de simulação.
+Após a migração, nove testes passaram. O teste no navegador mede geração e renderização, incluindo FPS, tempo de quadro e streaming. Ainda não há carga de personagens para medir desempenho de simulação.
 
-Na consulta sintética de ocupação, sete rodadas no Node 24.19.0, em um Intel i3-10105, validaram os mesmos 1.024 lotes por rodada em um mapa de 768 m com semente 1769. As medianas foram 18,72 ms com zero, 49,74 ms com mil e 313,03 ms com dez mil construções distantes. A medição abrange apenas a consulta de lote. A migração deve criar um cenário reproduzível e coletar uma nova linha de base antes de comparar.
+Execute `npm run benchmark:placement` para repetir a consulta sintética. São sete rodadas de 1.024 consultas em um mapa de 768 m com semente 1769. No Node 24.19.0, em um Intel i3-10105, as medianas anteriores foram 18,72, 49,74 e 313,03 ms com zero, mil e dez mil construções distantes. Após a migração foram 16,95, 16,27 e 15,99 ms, respectivamente. A preparação do índice com dez mil construções levou 7,61 ms nessa execução. São medições de consulta de lote em uma máquina.
+
+A migração também comparou 60.690 decisões de ocupação com o protótipo importado, incluindo bordas de defesas, sem divergências. Em duas sementes de referência, os dados gerados e as malhas amostradas de terreno, água e estruturas tiveram a mesma assinatura do protótipo importado. No Chrome, a versão de produção gerou um mapa de 5.000 × 5.000 m e carregou os chunks da borda sudeste sem erro.
 
 ## Matriz de verificação
 

@@ -1,4 +1,4 @@
-import { buildable } from './settlements.js';
+import { buildable } from './terrain/placement.js';
 
 export function auditWorld(world) {
   let brokenRivers = 0, steepLand = 0, invalidSites = 0;

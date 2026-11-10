@@ -5,6 +5,7 @@ import { hash } from '../world/math.js';
 export const box = new T.BoxGeometry(1, 1, 1);
 export const stone = new T.DodecahedronGeometry(1, 0);
 export const trunk = new T.CylinderGeometry(.62, 1, 1, 7);
+export const octagonalCylinder = new T.CylinderGeometry(1, 1, 1, 8);
 const color = new T.Color();
 const up = new T.Vector3(0, 1, 0);
 

@@ -1,6 +1,6 @@
 # Instruções para agentes
 
-Este repositório começa pela documentação do jogo. A etapa atual e a próxima entrega estão em [Protótipo e migração](docs/prototipo-e-migracao.md). Antes de editar regras de jogo, leia o [GDD](docs/gdd.md) e a [arquitetura-alvo](docs/arquitetura-alvo.md). Para mudanças de desempenho, siga [Validação](docs/validacao.md).
+Este repositório contém o protótipo e a documentação do jogo. A etapa atual e a próxima entrega estão em [Protótipo e migração](docs/prototipo-e-migracao.md). Antes de editar regras de jogo, leia o [GDD](docs/gdd.md) e a [arquitetura-alvo](docs/arquitetura-alvo.md). Para mudanças de desempenho, siga [Validação](docs/validacao.md).
 
 ## Contratos de trabalho
 
@@ -13,7 +13,7 @@ Este repositório começa pela documentação do jogo. A etapa atual e a próxim
 - Em cada comando, revalide alvo e condições no estado autoritativo. Aplique conjuntamente mudanças que preservam uma invariável. Emita fatos depois da confirmação. Mantenha o encadeamento de reações limitado e rastreável.
 - Em caminhos frequentes, conte candidatos visitados e trabalho efetivo. Use consultas locais e agendamento por atividade. Baseie a adoção de ECS completo e Workers persistentes em medições representativas.
 - Preserve os controles, o estilo medieval e a legibilidade do mapa ao migrar o protótipo. Use referências públicas como inspiração e mantenha atribuições de código e recursos incorporados.
-- Confira o conjunto de arquivos preparado antes de cada commit. Nesta etapa, publique somente os documentos aprovados. Ao importar o código, inclua manifesto, lockfile e avisos de terceiros pertinentes. Mantenha dependências instaladas, builds, capturas e saves locais fora dos commits.
+- Confira o conjunto de arquivos preparado antes de cada commit. Inclua alterações pertinentes no manifesto, lockfile e avisos de terceiros. Mantenha dependências instaladas, builds, capturas e saves locais fora dos commits.
 
 ## Verificação
 
