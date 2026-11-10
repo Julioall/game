@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1c2b29">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%231c2b29'/%3E%3Cpath d='M5 24l6-12 4 6 5-10 7 16Z' fill='none' stroke='%23dfbc78' stroke-width='2'/%3E%3C/svg%3E">
+  <title>Kingdom · Atlas Vivo</title>
+</head>
+<body>
+  <main id="atlas">
+    <canvas id="world" aria-label="Mundo medieval explorável" tabindex="0"></canvas>
+    <header class="identity">
+      <div class="crest" aria-hidden="true"><svg viewBox="0 0 40 44"><path d="M3 3h34v21c0 7-7 13-17 17C10 37 3 31 3 24Z" fill="none" stroke="currentColor"/><path d="m9 29 8-13 4 6 4-8 6 15ZM17 9h6M20 6v6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></div>
+      <div><p class="eyebrow">ATLAS VIVO <span>◆</span> PROTÓTIPO</p><h1>Kingdom</h1><p id="region">Cartografando o mundo…</p></div>
+    </header>
+
+    <nav class="top-tools" aria-label="Ferramentas do atlas">
+      <button id="diagnose" aria-expanded="false" aria-controls="diagnostics" title="Diagnóstico">◉ <span>Diagnóstico</span></button>
+      <button id="settings" title="Gerar mundo">✦ <span>Gerar mundo</span></button>
+    </nav>
+
+    <aside id="diagnostics" class="panel" hidden>
+      <p class="eyebrow">INSTRUMENTOS</p>
+      <div id="stats" aria-live="off"></div>
+      <label>Camada do mapa
+        <select id="layer"><option value="realm">Reinos</option><option value="biome">Biomas</option><option value="water">Drenagem</option><option value="slope">Inclinação</option></select>
+      </label>
+      <button id="walkways" type="button" aria-pressed="false">Mostrar percursos</button>
+    </aside>
+
+    <div class="bottom-left">
+      <div id="toast" role="status"></div>
+      <div id="inspect" class="panel" hidden></div>
+      <section class="actions panel" aria-label="Recursos e construção">
+        <span class="resource" title="Madeira">▰ <strong id="wood">0</strong><small>Madeira</small></span>
+        <span class="resource" title="Pedra">◆ <strong id="stone">0</strong><small>Pedra</small></span>
+        <button id="build" aria-pressed="false" title="Construir cabana por 3 madeiras e 2 pedras">⌂ <span>Cabana</span></button>
+      </section>
+      <p class="controls"><kbd>WASD</kbd> ou arraste <span>·</span> Role para aproximar <span>·</span> Clique para inspecionar</p>
+    </div>
+
+    <section class="chart panel" aria-label="Mapa e navegação">
+      <div class="chart-title"><span class="eyebrow">CARTA DOS REINOS</span><span id="seed-label"></span></div>
+      <canvas id="map" width="200" height="200" aria-label="Minimapa clicável"></canvas>
+      <select id="destination" aria-label="Viajar para uma vila ou capital" hidden></select>
+      <div class="chart-links">
+        <button id="home" title="Ir para a vila">Vila</button>
+        <button id="lake" title="Ir para o maior lago">Lago</button>
+        <button id="peak" title="Ir para o ponto mais alto">Pico</button>
+        <button id="zoom-out" aria-label="Afastar">−</button><button id="zoom-in" aria-label="Aproximar">+</button>
+      </div>
+    </section>
+
+    <div id="loading" role="status"><div><span>✦</span><p>Traçando os rios e o relevo</p></div></div>
+    <dialog id="generator">
+      <form id="config">
+        <p class="eyebrow">CARTOGRAFIA PROCEDURAL</p><h2>Gerar mundo</h2>
+        <div class="config-grid">
+          <label>Semente <input name="seed" type="number" min="0" max="4294967295" step="1" required></label>
+          <label>Extensão <select name="size"></select></label>
+          <label>Paleta <select name="style"><option value="autumn">Fim de verão</option><option value="spring">Primavera</option></select></label>
+          <label>Detalhe <select name="detail"><option value="crisp">Fino</option><option value="balanced">Equilibrado</option><option value="atlas">Econômico</option></select></label>
+        </div>
+        <div id="sliders"></div>
+        <div class="dialog-actions"><button type="button" id="roll">Sortear semente</button><button type="button" id="close">Voltar</button><button class="primary" type="submit">Explorar</button></div>
+      </form>
+    </dialog>
+  </main>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

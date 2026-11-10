@@ -1,0 +1,107 @@
+:root {
+  color-scheme: dark;
+  --ink: #eee5ca;
+  --muted: #bab9a2;
+  --gold: #dfbc78;
+  --panel: #172724ed;
+  --line: #d8c79b44;
+  font: 14px system-ui, sans-serif;
+  color: var(--ink);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; overflow: hidden; background: #263b35; }
+#atlas { position: relative; width: 100vw; height: 100dvh; overflow: hidden; }
+#world { display: block; width: 100%; height: 100%; image-rendering: pixelated; cursor: grab; touch-action: none; }
+#world.dragging { cursor: grabbing; }
+#world.building { cursor: crosshair; }
+button, input, select { font: inherit; color: inherit; }
+button {
+  padding: .62rem .84rem; background: #273733; border: 1px solid var(--line); border-radius: 3px;
+  cursor: pointer; white-space: nowrap;
+}
+button:hover, button[aria-pressed=true], button[aria-expanded=true] { color: #fff2ce; border-color: #ba9c64; background: #394438; }
+button:disabled { opacity: .42; cursor: default; }
+button:focus-visible, select:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.panel, .identity, .top-tools button, dialog {
+  border: 1px solid var(--line); background: var(--panel); box-shadow: 0 4px 18px #0a171849;
+}
+.identity {
+  position: absolute; top: 22px; left: 22px; display: flex; align-items: center;
+  gap: 14px; padding: 11px 22px 13px 14px; border-radius: 4px;
+  pointer-events: none; border-top: 2px solid #b79b63;
+}
+.crest { width: 37px; color: var(--realm-color, var(--gold)); align-self: center; flex-shrink: 0; }
+.crest svg { display: block; width: 100%; }
+.eyebrow { color: var(--gold); font-size: .66rem; font-weight: 750; letter-spacing: .19em; margin: 0; }
+.eyebrow span { color: #9a9c73; margin-inline: 3px; }
+h1, h2 { font-family: Georgia, serif; font-weight: 500; }
+h1 { font-size: clamp(1.75rem, 3vw, 2.52rem); line-height: 1; margin: 3px 0 5px; }
+#region { margin: 0; color: var(--muted); font-size: .73rem; }
+.top-tools { position: absolute; right: 22px; top: 22px; display: flex; gap: 7px; }
+.top-tools button { color: var(--gold); }
+.top-tools span { color: var(--ink); margin-left: 3px; }
+#diagnostics { position: absolute; right: 22px; top: 68px; padding: 14px; width: 232px; z-index: 1; }
+#stats { margin: 9px 0; font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto; gap: 5px 8px; font-size: .76rem; }
+#stats b { font-weight: 600; color: var(--gold); text-align: right; }
+#diagnostics label { display: grid; gap: 5px; color: var(--muted); font-size: .78rem; }
+#walkways { width: 100%; margin-top: 8px; font-size: .75rem; }
+.chart { position: absolute; right: 22px; bottom: 22px; border-radius: 4px; padding: 9px; width: 210px; }
+.chart-title { display: flex; align-items: center; justify-content: space-between; padding: 0 0 7px; }
+#seed-label { color: var(--muted); font-size: .71rem; font-variant-numeric: tabular-nums; }
+#map { width: 100%; aspect-ratio: 1; height: auto; display: block; image-rendering: pixelated; cursor: crosshair; background: #263e3b; border: 1px solid #adac7b57; }
+#destination { width: 100%; margin-top: 6px; padding: .32rem .42rem; font-size: .71rem; text-overflow: ellipsis; }
+.chart-links { display: flex; gap: 4px; margin-top: 6px; }
+.chart-links button { flex: 1; padding: .33rem .39rem; font-size: .71rem; }
+.bottom-left { position: absolute; bottom: 20px; left: 22px; max-width: calc(100% - 260px); }
+.actions { display: inline-flex; align-items: center; gap: 11px; padding: 6px 7px 6px 12px; border-radius: 4px; }
+.resource { color: var(--gold); white-space: nowrap; }
+.resource strong { color: var(--ink); }
+.resource small { color: var(--muted); margin-left: .19rem; }
+.actions button { color: var(--gold); }
+.actions button span { color: var(--ink); }
+.controls { margin: 7px 0 0; color: #f3ebd2; font-size: .72rem; background: #152322d9; border-radius: 3px; padding: .43rem .55rem; }
+.controls span { color: var(--gold); padding: 0 .18rem; }
+kbd { font: inherit; font-weight: bold; }
+#toast { color: #f4e4b8; width: fit-content; margin: 0 0 7px; padding: 7px 10px; background: #172724ee; border: 1px solid var(--line); }
+#toast:empty { display: none; }
+#inspect { margin-bottom: 7px; width: min(274px, 100%); padding: 10px; display: grid; gap: 5px; }
+#inspect strong { font: 1.22rem Georgia, serif; }
+#inspect small { color: var(--muted); }
+#inspect button { justify-self: start; margin-top: 3px; color: var(--gold); }
+#loading {
+  position: absolute; inset: 0; display: grid; place-items: center; z-index: 3;
+  background: #1c2e2bdc; font: 1.38rem Georgia, serif; text-align: center; padding: 22px;
+}
+#loading span { color: var(--gold); font-size: 2rem; }
+dialog { width: min(510px, calc(100% - 26px)); max-height: 88dvh; padding: 22px; border-radius: 5px; }
+dialog::backdrop { background: #101d1ba8; }
+h2 { font-size: 2.1rem; margin: 3px 0 15px; }
+.config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 15px; }
+.config-grid label { display: grid; gap: 5px; color: var(--muted); }
+select, input[type=number] { padding: .39rem .55rem; background: #22332e; border: 1px solid var(--line); border-radius: 3px; min-width: 0; }
+#sliders { margin: 13px 0; display: grid; gap: 3px; }
+#sliders label { display: grid; grid-template-columns: 1fr minmax(70px, 36%) 3ch; align-items: center; gap: 8px; font-size: .81rem; }
+input[type=range] { width: 100%; accent-color: #c2a367; }
+output { text-align: right; color: var(--gold); font-variant-numeric: tabular-nums; }
+.dialog-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.primary { background: #ba975f; color: #1b2720; border-color: #d9b775; font-weight: 700; }
+.primary:hover { background: #d1b276; color: #182621; }
+@media (max-width: 640px) {
+  .identity { top: 10px; left: 10px; gap: 8px; padding: 7px 11px 8px 9px; }
+  .crest { width: 28px; }
+  .top-tools { right: 10px; top: 10px; }
+  .top-tools button { padding: .48rem .58rem; }
+  .top-tools span { display: none; }
+  .chart { right: 10px; bottom: 11px; width: 134px; padding: 5px; }
+  .chart .eyebrow { font-size: .49rem; letter-spacing: .11em; }
+  #seed-label { font-size: .56rem; }
+  .chart-links { gap: 2px; }
+  .chart-links button { padding: .22rem .19rem; font-size: .65rem; }
+  #destination { padding: .23rem; font-size: .63rem; }
+  .bottom-left { left: 10px; bottom: 11px; max-width: calc(100% - 155px); }
+  .actions { gap: 6px; padding: 4px; }
+  .actions button { padding: .36rem; }
+  .resource small, .controls { display: none; }
+  #diagnostics { right: 10px; top: 51px; }
+}
