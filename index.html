@@ -16,6 +16,7 @@
     </header>
 
     <nav class="top-tools" aria-label="Ferramentas do atlas">
+      <button id="traverse" type="button" aria-pressed="false" title="Explorar a pé" aria-label="Explorar a pé">♟ <span>Explorar a pé</span></button>
       <button id="diagnose" aria-expanded="false" aria-controls="diagnostics" title="Diagnóstico">◉ <span>Diagnóstico</span></button>
       <button id="settings" title="Gerar mundo">✦ <span>Gerar mundo</span></button>
     </nav>
@@ -37,7 +38,8 @@
         <span class="resource" title="Pedra">◆ <strong id="stone">0</strong><small>Pedra</small></span>
         <button id="build" aria-pressed="false" title="Construir cabana por 3 madeiras e 2 pedras">⌂ <span>Cabana</span></button>
       </section>
-      <p class="controls"><kbd>WASD</kbd> ou arraste <span>·</span> Role para aproximar <span>·</span> Clique para inspecionar</p>
+      <p class="controls" id="map-controls"><kbd>WASD</kbd> ou arraste <span>·</span> Role para aproximar <span>·</span> Clique para inspecionar</p>
+      <p class="controls" id="travel-controls" hidden><strong id="travel-mode"></strong> <span>·</span> <kbd>WASD</kbd> ou toque no destino <span>·</span> <kbd>Esc</kbd> volta ao mapa</p>
     </div>
 
     <section class="chart panel" aria-label="Mapa e navegação">

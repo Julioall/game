@@ -4,10 +4,12 @@ import { crownOverlaps } from '../world/audit.js';
 import { chunkKey } from '../world/chunks.js';
 import { chunkObjects } from '../world/vegetation.js';
 import { clamp, gridSample } from '../world/math.js';
-import { buildingMaterial, makeClock, objectMaterial, shadowMaterial, terrainMaterial, waterMaterial } from './materials.js';
+import { beachMaterial, buildingMaterial, makeClock, objectMaterial, shadowMaterial, terrainMaterial, waterMaterial } from './materials.js';
 import { groundShadows, surfaceMeshes } from './terrain.js';
 import { instances, modelBank } from './vegetation.js';
 import { structuresMesh } from './structures.js';
+import { travelerModel } from './traveler.js';
+import { oceanGeometry } from './water.js';
 
 const viewing = new T.Vector3(1, 1.16, 1);
 const groundPitch = viewing.y / viewing.length();
@@ -54,19 +56,15 @@ export class WorldView {
     this.focus = { ...this.home };
     this.clock = makeClock();
     this.materials = {
-      terrain: terrainMaterial(), water: waterMaterial(this.clock), shadow: shadowMaterial(),
+      terrain: terrainMaterial(), water: waterMaterial(this.clock), beach: beachMaterial(this.clock), shadow: shadowMaterial(),
       wind: objectMaterial(this.clock, true), solid: objectMaterial(this.clock),
       houses: buildingMaterial()
     };
     this.bank = modelBank(world.config.style);
-    const oceanSize = Math.max(1450, world.config.size + 800);
-    const ocean = new T.PlaneGeometry(oceanSize, oceanSize);
-    ocean.rotateX(-Math.PI / 2);
-    ocean.translate(world.config.size / 2, -.085, world.config.size / 2);
-    ocean.setAttribute('waterDepth', new T.Float32BufferAttribute([5, 5, 5, 5], 1));
-    ocean.setAttribute('bank', new T.Float32BufferAttribute([2, 2, 2, 2], 1));
-    this.ocean = new T.Mesh(ocean, this.materials.water);
+    this.ocean = new T.Mesh(oceanGeometry(world.config.size), this.materials.water);
     this.scene.add(this.ocean);
+    this.traveler = travelerModel();
+    this.scene.add(this.traveler);
     this.walkwayOverlay = null;
     this.chunks = new Map();
     this.bridges = new Map();
@@ -91,6 +89,21 @@ export class WorldView {
     this.renderer.setSize(Math.max(1, Math.round(width / scale)), Math.max(1, Math.round(height / scale)), false);
     this.aspect = width / height;
     this.stale = true;
+  }
+
+  showTraveler(actor) {
+    const wasVisible = this.traveler.visible;
+    this.traveler.visible = Boolean(actor);
+    if (!actor) return;
+    if (wasVisible) {
+      const dx = actor.x - this.traveler.position.x, dz = actor.z - this.traveler.position.z;
+      if (dx || dz) this.traveler.rotation.y = Math.atan2(dx, dz);
+    }
+    this.traveler.position.set(actor.x, actor.y - (actor.mode === 'swim' ? 1.20 : 0), actor.z);
+  }
+
+  waterRipple(x, z, age, strength) {
+    this.materials.water.uniforms.ripple.value.set(x, z, age, strength);
   }
 
   move(dx, dz) {
@@ -306,6 +319,7 @@ export class WorldView {
     for (const chunk of this.chunks.values()) this.release(chunk);
     this.bank.clear();
     this.ocean.geometry.dispose();
+    this.traveler.userData.dispose();
     for (const mat of Object.values(this.materials)) mat.dispose();
     this.sun.shadow.dispose();
     if (this.walkwayOverlay) {

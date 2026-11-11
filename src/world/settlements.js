@@ -43,6 +43,7 @@ function crossings(world) {
   const middle = (stride - 1) / 2;
   for (let i = 0; i < river.length; i++) {
     if (!river[i] || lake[i] || slope[i] > .24) continue;
+    if (config.hydrology >= 2 && world.surface[i] - ground[i] < .25) continue;
     const x = i % stride, z = Math.floor(i / stride);
     if (Math.min(x, z, stride - 1 - x, stride - 1 - z) < 20) continue;
     for (const step of [1, stride]) {

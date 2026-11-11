@@ -1,4 +1,4 @@
-import { CHUNK } from './catalog.js';
+import { CHUNK, HEADWATER_GROVE_RADIUS } from './catalog.js';
 import { immutableCopy } from './read-only.js';
 
 export const chunkKey = (x, z) => Math.floor(x / CHUNK) + ',' + Math.floor(z / CHUNK);
@@ -24,6 +24,21 @@ function readOnlyBuckets(buckets) {
 export function indexTowns(world) {
   const roads = new Set(), paved = new Set(), buildings = new Map(), defenses = new Map(), yards = new Map();
   const fields = new Map(), districts = new Map();
+  const headwaters = new Map();
+  const riverMouths = new Map();
+  for (const mouth of world.riverMouths ?? []) {
+    const endX = mouth.x + mouth.dx * mouth.length, endZ = mouth.z + mouth.dz * mouth.length;
+    const margin = mouth.width + mouth.length * .38 + 3;
+    const points = mouth.path?.length ? mouth.path : [{ x: mouth.x, z: mouth.z }, { x: endX, z: endZ }];
+    indexBounds(riverMouths, immutableCopy(mouth), {
+      minX: Math.min(...points.map(p => p.x)), maxX: Math.max(...points.map(p => p.x)),
+      minZ: Math.min(...points.map(p => p.z)), maxZ: Math.max(...points.map(p => p.z))
+    }, margin);
+  }
+  for (const i of world.headwaters ?? []) {
+    const x = i % world.stride, z = Math.floor(i / world.stride);
+    indexBounds(headwaters, Object.freeze({ x, z }), { minX: x, maxX: x, minZ: z, maxZ: z }, HEADWATER_GROVE_RADIUS);
+  }
   for (const town of world.towns) {
     for (const r of town.roads) roads.add(r);
     for (const r of town.paved ?? []) paved.add(r);
@@ -52,6 +67,7 @@ export function indexTowns(world) {
     roads: Object.freeze({ has: cell => roads.has(cell) }),
     paved: Object.freeze({ has: cell => paved.has(cell) }),
     buildings: readOnlyBuckets(buildings), defenses: readOnlyBuckets(defenses),
-    yards: readOnlyBuckets(yards), fields: readOnlyBuckets(fields), districts: readOnlyBuckets(districts)
+    yards: readOnlyBuckets(yards), fields: readOnlyBuckets(fields), districts: readOnlyBuckets(districts),
+    headwaters: readOnlyBuckets(headwaters), riverMouths: readOnlyBuckets(riverMouths)
   });
 }

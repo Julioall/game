@@ -10,7 +10,7 @@ function freezeRecord(value) {
 
 export const immutableCopy = value => freezeRecord(structuredClone(value));
 
-const gridFields = ['ground', 'wet', 'surface', 'biome', 'slope', 'distance', 'lake', 'river', 'raw', 'territory'];
+const gridFields = ['ground', 'wet', 'surface', 'waterKind', 'biome', 'slope', 'distance', 'lake', 'river', 'raw', 'territory'];
 
 export function readOnlyWorld(world) {
   const { config, stride, realms, metrics } = world;

@@ -1,22 +1,29 @@
 import './style.css';
 import { Vector3 } from 'three';
-import { BIOMES, CHUNK, DEFAULT, MAX_MAP_SIZE, SETTINGS, SPECIES } from './world/catalog.js';
+import { BIOMES, CHUNK, DEFAULT, HYDROLOGY_VERSIONS, MAX_MAP_SIZE, SETTINGS, SPECIES } from './world/catalog.js';
 import { configuration } from './world/generate.js';
 import { WorldState } from './world/state.js';
+import { TRAVERSAL_TICK } from './world/traversal.js';
 import { WorldView } from './render/view.js';
-import { loadSave, storeSave } from './platform/local-save.js';
+import { loadSave, savedGeneration, storeSave } from './platform/local-save.js';
 import { mapImage, paintMap } from './ui/map.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('world'), map = $('map'), dialog = $('generator'), form = $('config');
 const destination = $('destination');
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
+const waterNames = { sea: 'Mar', lake: 'Lago', river: 'Rio' };
+const travelNames = { walk: 'Caminhando', wade: 'Água rasa', swim: 'Nadando' };
 const keys = new Set();
 const intervals = [];
 let view, state, image, places, worker, selected, pointer, toastTimer, lostContext = false;
 let building = false, lastFrame = 0, lastUi = 0, firstDraw = false;
+let choosingStart = false, traveler = null, travelTime = 0, ripple = null;
+const initialParams = new URLSearchParams(location.search);
+const requestedHydrology = Number(initialParams.get('hydrology'));
+const explicitHydrology = HYDROLOGY_VERSIONS.includes(requestedHydrology);
 let current = configuration({ ...DEFAULT, ...Object.fromEntries(
-  [...new URLSearchParams(location.search)].map(([k, v]) => [k, ['style', 'detail'].includes(k) ? v : Number(v)])
+  [...initialParams].map(([k, v]) => [k, ['style', 'detail'].includes(k) ? v : Number(v)])
 ) });
 
 function message(text) {
@@ -32,12 +39,48 @@ function inventory() {
 }
 
 function setBuilding(enabled) {
+  if (enabled) endTravel();
   building = enabled;
   $('build').setAttribute('aria-pressed', String(enabled));
   canvas.classList.toggle('building', enabled);
   if (enabled) {
     inspect();
     message('Escolha um terreno livre para a cabana · 3 madeiras e 2 pedras');
+  }
+}
+
+function endTravel() {
+  if (!choosingStart && !traveler) return;
+  choosingStart = false;
+  traveler = ripple = null;
+  travelTime = 0;
+  state?.endTraversal();
+  view?.showTraveler(null);
+  view?.waterRipple(0, 0, 0, 0);
+  $('traverse').setAttribute('aria-pressed', 'false');
+  $('map-controls').hidden = false;
+  $('travel-controls').hidden = true;
+}
+
+function travelFrame(dx, dz, dt, now) {
+  travelTime += Math.min(dt / 1000, .1);
+  while (travelTime >= TRAVERSAL_TICK) {
+    travelTime -= TRAVERSAL_TICK;
+    if (!(dx || dz) && !state.hasTravelTarget && traveler.mode !== 'swim') continue;
+    const next = state.moveTraveler(dx, dz);
+    if (!next) { state.cancelTravelTarget(); continue; }
+    if (next.mode !== traveler.mode) $('travel-mode').textContent = travelNames[next.mode];
+    traveler = next;
+    if (next.waterSurface !== undefined && !motion.matches && (!ripple || now - ripple.started >= 760)) {
+      ripple = { x: next.x, z: next.z, started: now, strength: next.mode === 'swim' ? 1 : .68 };
+    }
+    view.showTraveler(traveler);
+    view.move(traveler.x - view.focus.x, traveler.z - view.focus.z);
+  }
+  if (ripple) {
+    const age = (now - ripple.started) / 760;
+    view.waterRipple(ripple.x, ripple.z, age, age < 1 && !motion.matches ? ripple.strength : 0);
+    if (age >= 1) ripple = null;
   }
 }
 
@@ -58,6 +101,12 @@ function inspect(object, point) {
     button.addEventListener('click', harvest);
     panel.append(button);
   } else {
+    const water = state.waterAt(point.x, point.z);
+    if (water) {
+      title.textContent = waterNames[water.kind];
+      description.textContent = 'Profundidade ' + water.depth.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' m';
+      return;
+    }
     const { world } = view;
     const i = Math.round(point.z) * world.stride + Math.round(point.x);
     title.textContent = BIOMES[world.biome.at(i) ?? 0].name;
@@ -86,7 +135,25 @@ function harvest() {
 
 function applyClick(x, y) {
   if (!view) return;
-  const hit = view.pick(x, y, !building);
+  const hit = view.pick(x, y, !building && !choosingStart && !traveler);
+  if (choosingStart) {
+    if (!hit.point || !state.beginTraversal(hit.point.x, hit.point.z)) return message('Escolha um ponto em terra firme.');
+    choosingStart = false;
+    clearTimeout(toastTimer);
+    $('toast').textContent = '';
+    traveler = state.traveler;
+    view.go(traveler.x, traveler.z, 22);
+    view.showTraveler(traveler);
+    $('map-controls').hidden = true;
+    $('travel-controls').hidden = false;
+    $('travel-mode').textContent = travelNames[traveler.mode];
+    return;
+  }
+  if (traveler) {
+    if (hit.point) state.setTravelTarget(hit.point.x, hit.point.z);
+    else state.cancelTravelTarget();
+    return;
+  }
   if (!building) return inspect(hit.object, hit.point);
   if (!hit.point) return;
   const px = Math.round(hit.point.x), pz = Math.round(hit.point.z);
@@ -129,8 +196,10 @@ function showRegion() {
   identity.style.setProperty('--realm-color', realm?.color ?? '');
 }
 
-function loadWorld(config) {
+function loadWorld(config, preferSaved = true) {
+  if (preferSaved) config = savedGeneration(config);
   worker?.terminate();
+  endTravel();
   inspect();
   setBuilding(false);
   if (view && (current.size > 768 || config.size > 768)) {
@@ -222,7 +291,10 @@ function frame(now) {
   if (!dialog.open) {
     const x = Number(keys.has('d') || keys.has('arrowright')) - Number(keys.has('a') || keys.has('arrowleft'));
     const y = Number(keys.has('s') || keys.has('arrowdown')) - Number(keys.has('w') || keys.has('arrowup'));
-    if (x || y) view.pan(x * Math.min(dt, 48) * .46, y * Math.min(dt, 48) * .46);
+    if (traveler) {
+      const scale = Math.max(1, Math.hypot(x, y));
+      travelFrame((x + y) * Math.SQRT1_2 / scale, (y - x) * Math.SQRT1_2 / scale, dt, now);
+    } else if (x || y) view.pan(x * Math.min(dt, 48) * .46, y * Math.min(dt, 48) * .46);
   }
   view.draw(motion.matches ? 0 : now / 1000);
   if (firstDraw) {
@@ -249,6 +321,7 @@ canvas.addEventListener('pointermove', event => {
   if (!pointer || !view || !event.isPrimary) return;
   if (!pointer.moved && Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) <= 5) return;
   pointer.moved = true;
+  if (traveler) return;
   canvas.classList.add('dragging');
   view.pan(pointer.x - event.clientX, pointer.y - event.clientY);
   pointer.x = event.clientX;
@@ -270,6 +343,7 @@ canvas.addEventListener('wheel', event => {
   const bounds = canvas.getBoundingClientRect();
   const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? bounds.height : 1;
   const delta = Math.max(-160, Math.min(160, event.deltaY * units));
+  if (traveler) return view.zoom(Math.exp(delta * .0017));
   view.zoom(Math.exp(delta * .0017), event.clientX - bounds.left - bounds.width / 2,
     event.clientY - bounds.top - bounds.height / 2);
 }, { passive: false });
@@ -289,23 +363,33 @@ window.addEventListener('keydown', event => {
   }
   if (key === '+' || key === '=') view?.zoom(.85);
   if (key === '-') view?.zoom(1.18);
-  if (key === 'escape') { setBuilding(false); inspect(); }
+  if (key === 'escape') { endTravel(); setBuilding(false); inspect(); }
 });
 window.addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
 window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', () => view?.resize());
-$('home').onclick = () => view?.go(view.home.x, view.home.z, view.home.span);
+$('traverse').onclick = () => {
+  if (!view || !$('loading').hidden) return;
+  if (choosingStart || traveler) return endTravel();
+  setBuilding(false);
+  inspect();
+  choosingStart = true;
+  $('traverse').setAttribute('aria-pressed', 'true');
+  message('Clique em terra firme perto da margem para começar.');
+};
+$('home').onclick = () => { endTravel(); view?.go(view.home.x, view.home.z, view.home.span); };
 destination.onchange = () => {
   if (!view || !destination.value) return;
   const town = view.world.towns[Number(destination.value)];
   if (!town) return;
+  endTravel();
   view.go(town.x, town.z, town.cityWall ? 92 : town.fort ? 39 : town.kind === 'manor' ? 29 : 43);
   inspect();
   setBuilding(false);
   destination.value = '';
 };
-$('lake').onclick = () => { if (view && places.lake) view.go(places.lake.x, places.lake.z, 60); };
-$('peak').onclick = () => { if (view) view.go(places.peak.x, places.peak.z, 65); };
+$('lake').onclick = () => { endTravel(); if (view && places.lake) view.go(places.lake.x, places.lake.z, 60); };
+$('peak').onclick = () => { endTravel(); if (view) view.go(places.peak.x, places.peak.z, 65); };
 $('zoom-out').onclick = () => view?.zoom(1.24);
 $('zoom-in').onclick = () => view?.zoom(.81);
 $('build').onclick = () => { if (view) setBuilding(!building); };
@@ -325,6 +409,7 @@ $('walkways').onclick = () => {
 };
 map.addEventListener('click', event => {
   if (!view) return;
+  endTravel();
   const bounds = map.getBoundingClientRect(), size = view.world.config.size;
   view.go((event.clientX - bounds.left) / bounds.width * size, (event.clientY - bounds.top) / bounds.height * size);
 });
@@ -353,7 +438,9 @@ $('settings').onclick = () => {
   if (![...form.elements.size.options].some(o => Number(o.value) === current.size)) {
     form.elements.size.add(new Option(current.size + ' × ' + current.size + ' m', current.size));
   }
-  for (const [key, value] of Object.entries(current)) form.elements[key].value = value;
+  for (const [key, value] of Object.entries(current)) {
+    if (form.elements[key]) form.elements[key].value = value;
+  }
   updateRanges();
   dialog.showModal();
 };
@@ -362,11 +449,12 @@ $('roll').onclick = () => { form.elements.seed.value = crypto.getRandomValues(ne
 form.addEventListener('submit', event => {
   event.preventDefault();
   const values = Object.fromEntries([...new FormData(form)].map(([k, v]) => [k, ['style', 'detail'].includes(k) ? v : Number(v)]));
+  if (explicitHydrology) values.hydrology = requestedHydrology;
   dialog.close();
   const query = new URLSearchParams(values);
   if (new URLSearchParams(location.search).has('qa')) query.set('qa', '1');
   history.replaceState(null, '', '?' + query);
-  loadWorld(configuration(values));
+  loadWorld(configuration(values), values.hydrology === undefined);
 });
 
 if (new URLSearchParams(location.search).has('qa')) {
@@ -375,6 +463,8 @@ if (new URLSearchParams(location.search).has('qa')) {
     stats: () => view && stats(), resetFrames: () => { intervals.length = 0; },
     focus: () => ({ ...view.focus }), go: (x, z, span) => view.go(x, z, span),
     state: () => state.snapshot(), world: () => view.world.config,
+    waterAt: (x, z) => state.waterAt(x, z),
+    traveler: () => state.traveler,
     walkway: id => view.world.towns[id]?.fort?.walkway,
     settlements: () => view.world.towns.map(({ id, kind, name, realm, x, z, fort, cityWall, buildingCount }) =>
       ({ id, kind, name, realm, x, z, gate: fort?.gate, metropolis: Boolean(cityWall), buildings: buildingCount })),
@@ -400,5 +490,5 @@ if (new URLSearchParams(location.search).has('qa')) {
   };
 }
 
-loadWorld(current);
+loadWorld(current, !explicitHydrology);
 requestAnimationFrame(frame);

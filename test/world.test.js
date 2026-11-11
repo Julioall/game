@@ -1,17 +1,244 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { BIOMES, CHUNK, DEFAULT } from '../src/world/catalog.js';
+import { BIOMES, CHUNK, DEFAULT, TRAVERSAL_PROFILE } from '../src/world/catalog.js';
 import { chunkKey, indexTowns } from '../src/world/chunks.js';
-import { chunkObjects } from '../src/world/vegetation.js';
+import { chunkObjects, findResource } from '../src/world/vegetation.js';
 import { generate, configuration } from '../src/world/generate.js';
 import { buildable } from '../src/world/terrain/placement.js';
 import { WorldState } from '../src/world/state.js';
 import { gridSample } from '../src/world/math.js';
 import { crownOverlaps } from '../src/world/audit.js';
+import { sampleWater } from '../src/world/terrain/water.js';
+import { stepTraversal, traversalSurface } from '../src/world/traversal.js';
+import { loadSave, savedGeneration } from '../src/platform/local-save.js';
+import { mouthFlow } from '../src/world/terrain/water-flow.js';
 
 const world = generate();
 const index = indexTowns(world);
+
+test('mouth beds deepen the connection without changing the waterline', () => {
+  const previous = generate({ hydrology: 3 });
+  assert.deepEqual(world.wet, previous.wet);
+  assert.deepEqual(world.surface, previous.surface);
+  let deepened = 0;
+  for (let i = 0; i < world.ground.length; i++) {
+    if (world.ground[i] >= previous.ground[i]) continue;
+    deepened++;
+    assert.ok(world.wet[i] > 0);
+    assert.ok(world.waterKind[i] === 1 || world.waterKind[i] === 2);
+  }
+  assert.ok(deepened > 0);
+});
+
+test('the mouth current spreads downstream, fades and stops at land', () => {
+  const stride = 65;
+  const wet = new Float32Array(stride ** 2).fill(1);
+  const surface = new Float32Array(stride ** 2).fill(2);
+  const receiver = { stride, wet, surface };
+  const mouths = [{ x: 16, z: 32, dx: 1, dz: 0, width: 2, length: 24, level: 2 }];
+  const base = [0, 0, 1];
+  const at = (x, z = 32) => mouthFlow(receiver, x, z, mouths, base);
+  assert.ok(at(18)[0] > at(24)[0] && at(24)[0] > at(32)[0] && at(32)[0] > 0);
+  assert.ok(at(24, 34)[0] > 0);
+  const mixing = { strength: 0, progress: 0, lateral: 0 };
+  assert.deepEqual(mouthFlow(receiver, 24, 34, mouths, [1, 0, 1], mixing), [1, 0, 1]);
+  assert.ok(mixing.strength > 0 && mixing.progress > 0 && mixing.progress < 1 && mixing.lateral > 0);
+  assert.deepEqual(at(40), base);
+  assert.deepEqual(at(12), base);
+  wet[32 * stride + 23] = -1;
+  assert.deepEqual(at(32), base);
+  const blocked = { strength: 0, progress: 0, lateral: 0 };
+  mouthFlow(receiver, 32, 32, mouths, base, blocked);
+  assert.equal(blocked.strength, 0);
+  assert.ok(at(20)[0] > 0);
+  wet[32 * stride + 23] = 1;
+  surface[32 * stride + 23] = 4;
+  assert.deepEqual(at(32), base);
+  const curved = world.riverMouths.find(mouth => mouth.x === 81 && mouth.z === 145);
+  assert.ok(curved.path.length > 8);
+  const middle = curved.path[Math.floor(curved.path.length / 2)];
+  assert.ok(Math.hypot(...mouthFlow(world, middle.x, middle.z, [curved], [0, 0, 0]).slice(0, 2)) > 0);
+  for (const point of curved.path) assert.ok(world.wet[point.z * world.stride + point.x] > 0);
+});
+
+test('lake inlets meet the lake level and no longer consist of a short detached branch', () => {
+  const { order, downstream, river, lake, surface, ground } = world;
+  const longest = new Uint16Array(river.length);
+  let inlets = 0;
+  for (let p = order.length - 1; p >= 0; p--) {
+    const i = order[p];
+    if (!river[i]) continue;
+    const j = downstream[i];
+    if (river[j]) longest[j] = Math.max(longest[j], longest[i] + 1);
+    if (lake[j] === 1) {
+      inlets++;
+      assert.ok(longest[i] + 2 > Math.round(4 + world.config.size / 600));
+      assert.ok(surface[i] >= surface[j]);
+    }
+  }
+  assert.ok(inlets > 0);
+});
+
+test('each channel source becomes a pond with a wet downhill outlet', () => {
+  const previous = generate({ hydrology: 2 });
+  const hasUpstream = new Uint8Array(previous.river.length);
+  for (let i = 0; i < previous.river.length; i++) if (previous.river[i]) hasUpstream[previous.downstream[i]] = 1;
+  let sources = 0;
+  for (let i = 0; i < previous.river.length; i++) {
+    if (!previous.river[i] || hasUpstream[i]) continue;
+    const j = world.downstream[i];
+    sources++;
+    assert.equal(world.lake[i], 2);
+    assert.equal(world.river[i], 0);
+    assert.equal(world.waterKind[i], 2);
+    assert.ok(world.wet[j] > 0 && world.surface[i] >= world.surface[j]);
+  }
+  assert.ok(sources > 0);
+  assert.equal(world.metrics.headwaterPonds, sources);
+  assert.equal(generate({ lakes: 0 }).metrics.headwaterPonds, 0);
+});
+
+test('source groves add local trees and rocks with resolvable resource IDs', () => {
+  const ordinary = indexTowns({ ...world, headwaters: [] });
+  const keys = new Set(world.headwaters.map(i => chunkKey(i % world.stride, Math.floor(i / world.stride))));
+  const count = { tree: 0, rock: 0 }, original = { tree: 0, rock: 0 };
+  let addedTree;
+  for (const key of keys) {
+    const [cx, cz] = key.split(',').map(Number);
+    const resources = chunkObjects(world, index, cx, cz, { resourcesOnly: true });
+    const baseline = chunkObjects(world, ordinary, cx, cz, { resourcesOnly: true });
+    addedTree ??= resources.find(resource => resource.id.startsWith('st:'));
+    for (const resource of resources) count[resource.kind]++;
+    for (const resource of baseline) original[resource.kind]++;
+    if (resources.length) assert.deepEqual(findResource(world, index, resources[0].id), resources[0]);
+  }
+  assert.ok(count.tree > original.tree && count.rock > original.rock);
+  assert.ok(addedTree);
+  assert.deepEqual(findResource(world, index, addedTree.id), addedTree);
+  const state = new WorldState(world);
+  assert.ok(state.harvest(addedTree.id));
+  assert.equal(state.harvest(addedTree.id), null);
+  assert.ok(new WorldState(world, state.snapshot()).isRemoved(addedTree.id));
+});
+
+test('old saves select the original hydrology and retain their terrain', () => {
+  const config = configuration();
+  const { hydrology, ...legacyKeyConfig } = config;
+  const oldSave = { version: 1, removed: ['t:1:2'], buildings: [], inventory: { wood: 3, stone: 0 } };
+  const legacyKey = 'kingdom:1:' + JSON.stringify(legacyKeyConfig);
+  const entries = new Map([[legacyKey, JSON.stringify(oldSave)]]);
+  const storage = { getItem: key => entries.get(key) ?? null };
+  assert.equal(hydrology, 4);
+  assert.equal(savedGeneration(config, { getItem: () => null }).hydrology, 4);
+  const legacy = savedGeneration(config, storage);
+  assert.equal(legacy.hydrology, 1);
+  assert.deepEqual(loadSave(legacy, storage), oldSave);
+  const original = generate(legacy);
+  const digest = createHash('sha256');
+  for (const key of ['ground', 'wet', 'surface', 'waterKind', 'river', 'lake']) {
+    digest.update(new Uint8Array(original[key].buffer));
+  }
+  assert.equal(digest.digest('hex'), 'd43cad84fa02583d9385856d5b6ab681752610f3452a3530d55396f75902caa9');
+  const previous = { ...config, hydrology: 2 };
+  entries.set('kingdom:1:' + JSON.stringify(previous), JSON.stringify(oldSave));
+  assert.equal(savedGeneration(config, storage).hydrology, 2);
+  assert.deepEqual(loadSave(previous, storage), oldSave);
+  const beforePonds = generate(previous);
+  const previousDigest = createHash('sha256');
+  for (const key of ['ground', 'wet', 'surface', 'waterKind', 'river', 'lake']) {
+    previousDigest.update(new Uint8Array(beforePonds[key].buffer));
+  }
+  assert.equal(previousDigest.digest('hex'), 'e071b0f640fc51a6211f038dc06c43494dee274dded6e084f3af80d281d2326e');
+  entries.set('kingdom:1:' + JSON.stringify({ ...config, hydrology: 3 }), JSON.stringify(oldSave));
+  assert.equal(savedGeneration(config, storage).hydrology, 3);
+  entries.set('kingdom:1:' + JSON.stringify(config), JSON.stringify({ version: 1 }));
+  assert.equal(savedGeneration(config, storage).hydrology, 4);
+});
+
+test('the traveler can enter and leave a lake through the shallows without changing the save', () => {
+  const state = new WorldState(world);
+  const saved = state.snapshot();
+  assert.equal(state.beginTraversal(-1, 107), false);
+  assert.equal(state.beginTraversal(129.2, 104.2), false);
+  assert.equal(state.beginTraversal(132, 107), true);
+  assert.equal(state.beginTraversal(132, 107), false);
+  assert.equal(state.moveTraveler(Infinity, 0), null);
+  const entered = new Set(), exited = new Set();
+  for (let tick = 0; tick < 100 && state.traveler.mode !== 'swim'; tick++) {
+    entered.add(state.moveTraveler(-1, -1)?.mode);
+  }
+  assert.ok(entered.has('wade') && entered.has('swim'));
+  for (let tick = 0; tick < 100 && state.traveler.mode !== 'walk'; tick++) {
+    exited.add(state.moveTraveler(1, 1)?.mode);
+  }
+  assert.ok(exited.has('wade') && exited.has('walk'));
+  state.endTraversal();
+  assert.equal(state.traveler, null);
+  assert.deepEqual(state.snapshot(), saved);
+});
+
+test('a swimming traveler drifts downstream and cannot leave the map', () => {
+  const channel = { stride: 2, wet: [1, 1, 1, 1], ground: [0, 0, 0, 0],
+    surface: [2, 2, 2, 2], waterKind: [3, 3, 3, 3] };
+  const swimmer = traversalSurface(channel, .5, .5);
+  const next = stepTraversal(channel, swimmer, 0, 0);
+  assert.ok(next.x > swimmer.x);
+  assert.equal(next.z, swimmer.z);
+  assert.equal(stepTraversal(channel, traversalSurface(channel, 1, .5), 1, 0), null);
+});
+
+test('the authoritative state validates and completes a travel target', () => {
+  const state = new WorldState(world);
+  assert.equal(state.setTravelTarget(132, 107), false);
+  assert.ok(state.beginTraversal(132, 107));
+  assert.equal(state.setTravelTarget(-1, 107), false);
+  assert.ok(state.setTravelTarget(131.6, 106.6));
+  assert.equal(state.moveTraveler(NaN, 0), null);
+  assert.ok(state.hasTravelTarget);
+  assert.equal(state.setTravelTarget(Infinity, 107), false);
+  for (let tick = 0; tick < 10 && state.hasTravelTarget; tick++) state.moveTraveler(0, 0);
+  assert.equal(state.hasTravelTarget, false);
+  assert.ok(state.traveler.x < 132);
+  assert.ok(state.setTravelTarget(131.2, 106.2));
+  state.endTraversal();
+  assert.equal(state.hasTravelTarget, false);
+  assert.equal(state.traveler, null);
+});
+
+test('traversal accepts a data profile without requiring a browser', () => {
+  const channel = { stride: 2, wet: [1, 1, 1, 1], ground: [0, 0, 0, 0],
+    surface: [.5, .5, .5, .5], waterKind: [3, 3, 3, 3] };
+  const profile = { ...TRAVERSAL_PROFILE, swimDepth: .3, swimSpeed: 1, swimDrift: 0 };
+  assert.equal(traversalSurface(channel, .5, .5).mode, 'wade');
+  const swimmer = traversalSurface(channel, .5, .5, profile);
+  assert.equal(swimmer.mode, 'swim');
+  const next = stepTraversal(channel, swimmer, 1, 0, profile);
+  assert.ok(Math.abs(next.x - (.5 + profile.tick)) < 1e-10);
+});
+
+test('water queries follow the clipped shore and report depth and downstream direction', () => {
+  const shore = { stride: 2, wet: [1, -1, -1, -1], ground: [0, 0, 0, 0],
+    surface: [2, 0, 0, 0], waterKind: [3, 0, 0, 0] };
+  assert.deepEqual(sampleWater(shore, .125, .125),
+    { kind: 'river', surface: 1, depth: 1, flowX: .5, flowZ: 0 });
+  assert.equal(sampleWater(shore, .25, .25), null);
+  assert.equal(sampleWater(shore, .4, .4), null);
+  assert.equal(sampleWater(shore, -1, 0), null);
+  assert.equal(sampleWater(shore, NaN, 0), null);
+
+  const compact = generate(DEFAULT, { compact: true });
+  assert.deepEqual(compact.waterKind, world.waterKind);
+  const state = new WorldState(compact);
+  for (const [code, kind] of [[1, 'sea'], [2, 'lake'], [3, 'river']]) {
+    const i = compact.waterKind.indexOf(code);
+    assert.ok(i >= 0);
+    const water = state.waterAt(i % compact.stride, Math.floor(i / compact.stride));
+    assert.equal(water.kind, kind);
+    assert.ok(water.depth > 0);
+    assert.equal(Math.hypot(water.flowX, water.flowZ), code === 3 ? 1 : 0);
+  }
+});
 const fingerprint = w => {
   const digest = createHash('sha256');
   for (const data of [w.ground, w.wet, w.flux, w.downstream, w.biome, w.slope, w.territory]) {
@@ -57,6 +284,7 @@ test('generated village has plausible access, structures, fields, and bridge ban
   assert.ok(town.roads.length > 20);
   assert.ok(town.fields.length > 0);
   assert.ok(town.bridge);
+  assert.ok(world.surface[town.bridge.i] - world.ground[town.bridge.i] >= .25);
   const { a, b, deck } = town.bridge;
   assert.ok(world.wet[a] <= 0 && world.wet[b] <= 0);
   const step = a % world.stride === b % world.stride ? world.stride : 1;
@@ -151,7 +379,10 @@ test('chunk ownership is unique and independent of order across the map', () => 
     }
   }
   assert.ok(species.size >= 4 && ages.size > 30);
-  assert.equal(crownOverlaps(all), 0);
+  assert.ok(crownOverlaps(all) > 0);
+  const outsideGroves = all.filter(o => !world.headwaters.some(i =>
+    Math.hypot(o.x - i % world.stride, o.z - Math.floor(i / world.stride)) < 20));
+  assert.equal(crownOverlaps(outsideGroves), 0);
   assert.ok(world.counts.filter(count => count > 0).length >= 10);
 });
 

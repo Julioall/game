@@ -1,9 +1,11 @@
-import { STRUCTURES, VERSION } from './catalog.js';
+import { STRUCTURES, TRAVERSAL_PROFILE, VERSION } from './catalog.js';
 import { addToChunk, chunkKey, indexTowns } from './chunks.js';
 import { findResource } from './vegetation.js';
 import { gridSample } from './math.js';
 import { constructionRules } from './construction.js';
 import { readOnlyWorld } from './read-only.js';
+import { sampleWater } from './terrain/water.js';
+import { stepTraversal, traversalSurface } from './traversal.js';
 
 const validAmount = amount => Number.isSafeInteger(amount) && amount >= 0;
 
@@ -14,6 +16,8 @@ export class WorldState {
   #removed;
   #built = new Map();
   #construction;
+  #traveler = null;
+  #travelTarget = null;
 
   constructor(world, saved = {}) {
     this.#world = world;
@@ -50,6 +54,63 @@ export class WorldState {
 
   get inventory() {
     return { ...this.#inventory };
+  }
+
+  waterAt(x, z) {
+    return sampleWater(this.#world, x, z);
+  }
+
+  beginTraversal(x, z) {
+    if (this.#traveler) return false;
+    const start = traversalSurface(this.#world, x, z);
+    if (!start || start.water) return false;
+    this.#traveler = start;
+    return true;
+  }
+
+  get traveler() {
+    const actor = this.#traveler;
+    return actor && { x: actor.x, y: actor.y, z: actor.z, mode: actor.mode };
+  }
+
+  moveTraveler(dx, dz) {
+    if (!this.#traveler || !Number.isFinite(dx) || !Number.isFinite(dz) || !Number.isFinite(Math.hypot(dx, dz))) return null;
+    if (dx || dz) this.#travelTarget = null;
+    if (this.#travelTarget) {
+      dx = this.#travelTarget.x - this.#traveler.x;
+      dz = this.#travelTarget.z - this.#traveler.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance < TRAVERSAL_PROFILE.arrivalDistance) {
+        this.#travelTarget = null;
+        dx = dz = 0;
+      } else {
+        dx /= distance;
+        dz /= distance;
+      }
+    }
+    const next = stepTraversal(this.#world, this.#traveler, dx, dz);
+    if (!next) return null;
+    this.#traveler = next;
+    return { ...this.traveler, waterSurface: next.water?.surface };
+  }
+
+  setTravelTarget(x, z) {
+    if (!this.#traveler || !traversalSurface(this.#world, x, z)) return false;
+    this.#travelTarget = { x, z };
+    return true;
+  }
+
+  get hasTravelTarget() {
+    return this.#travelTarget !== null;
+  }
+
+  cancelTravelTarget() {
+    this.#travelTarget = null;
+  }
+
+  endTraversal() {
+    this.#traveler = null;
+    this.#travelTarget = null;
   }
 
   presentation() {

@@ -9,7 +9,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test",
     "playtest": "node tools/playtest.mjs",
-    "benchmark:placement": "node tools/benchmark-placement.mjs"
+    "benchmark:placement": "node tools/benchmark-placement.mjs",
+    "benchmark:water": "node --expose-gc tools/benchmark-water.mjs"
   },
   "dependencies": {
     "flatqueue": "2.0.3",

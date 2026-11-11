@@ -4,7 +4,7 @@ export function worldLandmarks(world) {
   const basins = new Map();
   for (let i = 0; i < world.ground.length; i++) {
     if (world.ground[i] > world.ground[peak]) peak = i;
-    if (!world.lake[i]) continue;
+    if (world.lake[i] !== 1) continue;
     const height = world.filled[i], sample = basins.get(height);
     if (sample) {
       sample.x += i % world.stride;

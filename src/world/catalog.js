@@ -1,6 +1,14 @@
 export const CHUNK = 32;
 export const MAX_MAP_SIZE = 5000;
+export const HEADWATER_GROVE_RADIUS = 16;
 export const VERSION = 1;
+export const HYDROLOGY_VERSIONS = Object.freeze([1, 2, 3, 4]);
+export const LATEST_HYDROLOGY = HYDROLOGY_VERSIONS.at(-1);
+export const TRAVERSAL_PROFILE = Object.freeze({
+  tick: 1 / 30, wadeDepth: .15, swimDepth: 1, arrivalDistance: .14,
+  walkSpeed: 4, wadeSpeed: 2.3, swimSpeed: 1.8, swimDrift: .55,
+  groundGrade: .85, waterGrade: 1.2
+});
 export const DEFAULT = Object.freeze({
   seed: 1769, size: 256, water: .42, relief: .64, climate: .50,
   vegetation: .68, rivers: .52, lakes: .55, settlements: .36,

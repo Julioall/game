@@ -2,7 +2,9 @@ import * as T from 'three';
 import { BIOMES, CHUNK } from '../world/catalog.js';
 import { clamp, gridSample, hash } from '../world/math.js';
 import { insideFort } from '../world/fortifications.js';
+import { waterVertex } from '../world/terrain/water.js';
 import { waterMesh } from './water.js';
+import { beachMesh } from './coast.js';
 
 const palette = BIOMES.map(b => new T.Color(b.color));
 const loam = new T.Color('#a58755');
@@ -14,7 +16,7 @@ const fieldDark = new T.Color('#735332');
 const fieldLight = new T.Color('#9f803e');
 
 export function surfaceMeshes(world, index, cx, cz, materials) {
-  const { stride, wet, surface, ground, biome, config } = world;
+  const { stride, wet, ground, biome, config } = world;
   const { roads, paved } = index;
   const key = cx + ',' + cz;
   const forts = index.yards.get(key) ?? [], fields = index.fields.get(key) ?? [];
@@ -47,7 +49,7 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
     positions.push(x, y, z);
     colors.push(base.r, base.g, base.b);
     if (wet.at(i) > 0) hasWater = true;
-    vertices.push({ x, z, y: surface.at(i), mask: wet.at(i), depth: Math.max(0, surface.at(i) - y) });
+    vertices.push(waterVertex(world, x, z, y));
   }
 
   for (let z = 0; z < z1 - z0; z++) for (let x = 0; x < x1 - x0; x++) {
@@ -63,8 +65,10 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
   const land = new T.Mesh(terrain, materials.terrain);
   land.receiveShadow = true;
   const meshes = [land];
-  const water = hasWater ? waterMesh(world, vertices, triangles, materials.water) : null;
+  const water = hasWater ? waterMesh(world, vertices, triangles, colors, materials.water, index.riverMouths?.get(key)) : null;
   if (water) meshes.push(water);
+  const wash = beachMesh(world, vertices, triangles, materials.beach);
+  if (wash) meshes.push(wash);
   return meshes;
 }
 

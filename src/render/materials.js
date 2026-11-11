@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { coastGLSL } from './coast.js';
 
 export const makeClock = () => ({ value: 0 });
 
@@ -112,14 +113,21 @@ export function buildingMaterial() {
 
 export function waterMaterial(clock) {
   return new T.ShaderMaterial({
-    uniforms: { kingdomTime: clock, ...T.UniformsUtils.merge([T.UniformsLib.fog, T.UniformsLib.lights]) },
+    uniforms: { kingdomTime: clock, ripple: { value: new T.Vector4() },
+      ...T.UniformsUtils.merge([T.UniformsLib.fog, T.UniformsLib.lights]) },
     fog: true,
     lights: true,
     vertexShader: `
       #include <common>
       attribute float waterDepth;
       attribute float bank;
+      attribute vec3 waterMotion;
+      attribute vec3 waterBed;
+      attribute vec3 waterMix;
       varying vec3 p;
+      varying vec3 motion;
+      varying vec3 bed;
+      varying vec3 mixing;
       varying float depth, edge;
       #include <fog_pars_vertex>
       #include <shadowmap_pars_vertex>
@@ -127,6 +135,9 @@ export function waterMaterial(clock) {
         p = position;
         depth = waterDepth;
         edge = bank;
+        motion = waterMotion;
+        bed = waterBed;
+        mixing = waterMix;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.);
         vec4 worldPosition = modelMatrix * vec4(position, 1.);
         vec3 transformedNormal = normalMatrix * vec3(0., 1., 0.);
@@ -136,7 +147,11 @@ export function waterMaterial(clock) {
       }`,
     fragmentShader: `
       uniform float kingdomTime;
+      uniform vec4 ripple;
       varying vec3 p;
+      varying vec3 motion;
+      varying vec3 bed;
+      varying vec3 mixing;
       varying float depth, edge;
       #include <common>
       #include <fog_pars_fragment>
@@ -145,23 +160,153 @@ export function waterMaterial(clock) {
       #include <shadowmap_pars_fragment>
       #include <shadowmask_pars_fragment>
       ${noiseGLSL}
+      ${coastGLSL}
+      float waterNoise(vec2 p) {
+        vec2 cell = floor(p);
+        vec2 t = fract(p);
+        t = t * t * (3. - 2. * t);
+        return mix(mix(hashCell(cell), hashCell(cell + vec2(1., 0.)), t.x),
+                   mix(hashCell(cell + vec2(0., 1.)), hashCell(cell + 1.), t.x), t.y);
+      }
+      float riverFoam(vec2 p, vec2 flow) {
+        return waterNoise(p * 2.3) * .56 + waterNoise((p + flow * .56) * 1.05) * .44;
+      }
+      float mouthEddy(vec2 local, float time, float spin) {
+        float radius = length(local);
+        float angle = atan(local.y, local.x + .00001);
+        return sin(angle + radius * 7.5 - time * spin) * exp(-radius * radius * 1.9);
+      }
       void main() {
-        vec2 q = floor(p.xz * 7.) / 7.;
-        vec2 delta = vec2(q.x - q.y, q.x + q.y);
-        float wave = sin(delta.y * 2.65 + sin(delta.x * .92) * 1.3 + kingdomTime * 1.6);
-        float glint = smoothstep(.88, .997, wave) * smoothstep(.46, .92, hashCell(floor(vec2(delta.x * .77, delta.y * .71))));
-        float crossWave = sin(q.x * 2.23 - q.y * 1.79 - kingdomTime * .81);
-        float bands = smoothstep(.1, .96, crossWave * wave);
-        vec3 deep = vec3(.021, .128, .155);
-        vec3 shallow = vec3(.077, .294, .233);
-        vec3 color = mix(shallow, deep, smoothstep(.15, 3.8, depth));
-        color += vec3(.120, .175, .129) * glint + vec3(.023, .042, .033) * bands;
-        float grade = length(vec2(dFdx(p.y), dFdy(p.y))) / max(.001, length(vec2(length(dFdx(p.xz)), length(dFdy(p.xz)))));
-        float foam = (1. - smoothstep(.035, .27, edge + .05 * wave)) * .48 + smoothstep(.35, .78, grade) * (.48 + glint * .32);
-        color = mix(color, vec3(.47, .67, .56), clamp(foam, 0., .88));
-        color *= .95 + dither4(gl_FragCoord.xy) * .1;
+        vec2 q = p.xz;
+        float sea = motion.z;
+        float speed = length(motion.xy);
+        float current = smoothstep(.035, .8, speed) * smoothstep(.035, .34, depth);
+        float advected = .5;
+        if (current > 0.) {
+          float a = fract(kingdomTime * .27);
+          float b = fract(a + .5);
+          vec2 travel = motion.xy * 4.5;
+          advected = mix(riverFoam(q - travel * b, motion.xy),
+            riverFoam(q - travel * a, motion.xy), 1. - abs(a * 2. - 1.));
+        }
+        float warp = waterNoise(q * .22);
+        // Blend the wave signals instead of the frequency to avoid compressed crests at the mouth.
+        vec2 lakeWave = vec2(1.25, 1.73), seaWave = vec2(.46, .74);
+        float lakePhase = dot(q, lakeWave) - kingdomTime * .58 + warp * 3.6;
+        float seaPhase = dot(q, seaWave) - kingdomTime * 1.45 + warp * 2.8;
+        float receiver = mix(sin(lakePhase), sin(seaPhase), sea);
+        lakePhase += current * (advected - .5) * 5.2;
+        seaPhase += current * (advected - .5) * 3.6;
+        float fine = dot(q, vec2(3.8, -2.05)) - kingdomTime * 1.08 - warp * 5.2;
+        float wave = mix(sin(lakePhase), sin(seaPhase), sea) * .65 + sin(fine) * .35;
+        vec2 slope = mix(lakeWave * cos(lakePhase) * .026, seaWave * cos(seaPhase) * .12, sea)
+          + vec2(.045, -.025) * cos(fine)
+          + vec2(.026, .023) * mix(cos(lakePhase * 1.86 + fine * .31), cos(seaPhase * 1.86 + fine * .31), sea);
+        vec2 acrossFlow = vec2(-motion.y, motion.x);
+        slope = slope * (1. - current * .48)
+          + motion.xy * (advected - .5) * .24
+          + acrossFlow * sin(lakePhase + seaPhase * .35) * current * .045;
+        float collision = 0., eddies = 0.;
+        float transition = mixing.x * smoothstep(.07, .65, depth);
+        if (transition > .01) {
+          vec2 local = vec2(mixing.y * 3., mixing.z * 2.8);
+          vec2 drift = vec2(sin(kingdomTime * .31), cos(kingdomTime * .27)) * .12;
+          eddies = mouthEddy(local - vec2(.8, .8) - drift, kingdomTime, 1.15)
+            + mouthEddy(local - vec2(1.55, -.8) + drift, kingdomTime, -.95);
+          float meeting = mixing.y * 12.5 + kingdomTime * 1.35
+            + sin(mixing.z * 5. + kingdomTime * .47) * 1.6 + warp * 2.;
+          collision = smoothstep(.42, .98, sin(meeting))
+            * (.45 + .55 * smoothstep(-.5, .85, receiver))
+            * smoothstep(.12, .72, waterNoise(q * .72 - motion.xy * kingdomTime * .21));
+          slope += transition * (motion.xy * (collision - .35) * .20
+            + acrossFlow * eddies * .18);
+          wave += transition * (collision * .35 + eddies * .2);
+        }
+        vec3 normal = normalize(vec3(-slope.x, 1., -slope.y));
+        vec3 eye = vec3(viewMatrix[0].z, viewMatrix[1].z, viewMatrix[2].z);
+        vec3 halfSun = normalize(eye + normalize(vec3(-.45, .7, -.24)));
+        float sky = pow(1. - max(0., dot(eye, normal)), 3.);
+        float glint = pow(max(0., dot(normal, halfSun)), 52.) * (.72 + .28 * wave);
+
+        float absorb = 1. - exp(-depth * mix(.94, 1.32, sea));
+        vec3 clearWater = mix(vec3(.057, .165, .153), vec3(.043, .165, .174), sea);
+        vec3 deepWater = mix(vec3(.018, .062, .071), vec3(.012, .061, .086), sea);
+        vec3 color = mix(clearWater, deepWater, absorb);
+        float bottom = exp(-depth * mix(1.9, 1.55, sea)) * (.83 - sky * .26);
+        float sand = hashCell(floor((q + slope * min(depth, 1.)) * 5.));
+        vec3 tintedBed = bed * vec3(.82, .96, .91) * mix(.93, 1.06, sand);
+        color = mix(color, tintedBed, bottom);
+        color = mix(color, vec3(.26, .38, .43), sky * (.22 + absorb * .26));
+        color += vec3(.105, .13, .14) * glint * (.32 + absorb * .68) * (.55 + warp * .45);
+
+        float coast = sea * (1. - current * .87);
+        vec2 shoreGradient = coastGradient(q, depth);
+        float foam = 0.;
+        if (coast > .01 && depth < 2.6) {
+          foam = coastalFoam(q, depth, shoreGradient, kingdomTime).x * coast;
+        }
+        float grade = length(vec2(dFdx(p.y), dFdy(p.y)))
+          / max(.001, length(vec2(length(dFdx(q)), length(dFdy(q)))));
+        if (current > 0.) {
+          float shallow = (1. - smoothstep(.13, .55, edge)) * smoothstep(.025, .13, depth);
+          float rapids = smoothstep(.14, .72, grade);
+          float streaks = smoothstep(.55, .82, advected);
+          foam += current * streaks * (.22 + shallow * .30 + rapids * .52);
+          color += vec3(.022, .038, .039) * current * (advected - .5);
+        }
+        foam += transition * (collision * (.12 + advected * .16)
+          + smoothstep(.15, .8, eddies) * .16);
+        color *= mix(vec3(1.), vec3(1.075, 1.025, .94), transition * (.45 + eddies * .16));
+        color = mix(color, vec3(.62, .72, .69), clamp(foam, 0., .8));
+        if (ripple.w > 0.) {
+          float crest = abs(length(q - ripple.xy) - (.18 + ripple.z * 1.8));
+          float ring = (1. - smoothstep(.045, .16, crest)) * (1. - ripple.z);
+          color += vec3(.23, .35, .32) * ring * ripple.w;
+        }
+        color *= .985 + dither4(gl_FragCoord.xy) * .03;
         color *= mix(vec3(.38, .51, .63), vec3(1.), getShadowMask());
         gl_FragColor = vec4(color, 1.);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`
+  });
+}
+
+export function beachMaterial(clock) {
+  return new T.ShaderMaterial({
+    uniforms: { kingdomTime: clock, ...T.UniformsUtils.merge([T.UniformsLib.fog]) },
+    transparent: true, depthWrite: false, fog: true,
+    vertexShader: `
+      varying vec3 p;
+      varying float mask;
+      attribute float coastMask;
+      #include <fog_pars_vertex>
+      void main() {
+        p = position;
+        mask = coastMask;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `
+      uniform float kingdomTime;
+      varying vec3 p;
+      varying float mask;
+      #include <common>
+      #include <fog_pars_fragment>
+      ${noiseGLSL}
+      ${coastGLSL}
+      void main() {
+        float height = p.y - .018;
+        vec2 gradient = coastGradient(p.xz, -height);
+        if (height < .012 || height > .22 || mask < .05) discard;
+        vec2 wash = coastalFoam(p.xz, -height, gradient, kingdomTime);
+        float coverage = smoothstep(.05, .8, mask) * (1. - smoothstep(.17, .22, height));
+        float alpha = (wash.x * .82 + wash.y * .16) * coverage;
+        if (alpha < .002) discard;
+        vec3 color = mix(vec3(.035, .065, .057), vec3(.68, .76, .73), clamp(wash.x * 2.2, 0., 1.));
+        gl_FragColor = vec4(color, alpha);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
         #include <fog_fragment>

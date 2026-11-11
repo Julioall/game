@@ -103,5 +103,6 @@ output { text-align: right; color: var(--gold); font-variant-numeric: tabular-nu
   .actions { gap: 6px; padding: 4px; }
   .actions button { padding: .36rem; }
   .resource small, .controls { display: none; }
+  #travel-controls { display: block; }
   #diagnostics { right: 10px; top: 51px; }
 }

@@ -151,7 +151,40 @@ try {
 
   await page.locator('#lake').click();
   await settle(page);
+  await page.waitForFunction(() => {
+    const qa = window.kingdomQA, { x, z } = qa.focus();
+    const water = qa.waterAt(x, z);
+    if (water?.kind !== 'lake') return false;
+    const screen = qa.project(x, water.surface, z);
+    return Math.abs(screen.x - innerWidth / 2) < 1 && Math.abs(screen.y - innerHeight / 2) < innerHeight / 5;
+  });
+  const lakePoint = await page.evaluate(() => {
+    const qa = window.kingdomQA, { x, z } = qa.focus();
+    return qa.project(x, qa.waterAt(x, z).surface, z);
+  });
+  await page.mouse.click(lakePoint.x, lakePoint.y);
+  assert.equal(await page.locator('#inspect strong').innerText({ timeout: 3000 }), 'Lago');
+  assert.match(await page.locator('#inspect small').innerText(), /^Profundidade [\d,]+ m$/);
   await page.screenshot({ path: output + '/lago.png' });
+  await page.locator('#traverse').click();
+  // A gentle bank in the default seed supports the same route in both directions.
+  const bank = await page.evaluate(() => window.kingdomQA.project(132, 8.4405, 107));
+  await page.mouse.click(bank.x, bank.y);
+  const travelMode = mode => page.waitForFunction(mode => window.kingdomQA.traveler()?.mode === mode, mode, { timeout: 7000 });
+  await travelMode('walk');
+  await page.keyboard.down('w');
+  await travelMode('wade');
+  await travelMode('swim');
+  await page.keyboard.up('w');
+  assert.equal(await page.locator('#travel-mode').innerText(), 'Nadando');
+  await page.screenshot({ path: output + '/travessia.png' });
+  const returnPoint = await page.evaluate(() => window.kingdomQA.project(132, 8.4405, 107));
+  await page.mouse.click(returnPoint.x, returnPoint.y);
+  await travelMode('wade');
+  await travelMode('walk');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.evaluate(() => window.kingdomQA.traveler()), null);
+  assert.deepEqual(await page.evaluate(() => window.kingdomQA.state()), saved);
   await page.locator('#peak').click();
   await settle(page);
   await page.screenshot({ path: output + '/pico.png' });

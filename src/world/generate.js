@@ -1,4 +1,4 @@
-import { CHUNK, DEFAULT, MAX_MAP_SIZE, SETTINGS } from './catalog.js';
+import { CHUNK, DEFAULT, HYDROLOGY_VERSIONS, LATEST_HYDROLOGY, MAX_MAP_SIZE, SETTINGS } from './catalog.js';
 import { clamp } from './math.js';
 import { ecology } from './ecology.js';
 import { geography } from './terrain/relief.js';
@@ -20,6 +20,7 @@ export function configuration(input = {}) {
   }
   if (['autumn', 'spring'].includes(input.style)) config.style = input.style;
   if (['crisp', 'balanced', 'atlas'].includes(input.detail)) config.detail = input.detail;
+  config.hydrology = HYDROLOGY_VERSIONS.includes(input.hydrology) ? input.hydrology : LATEST_HYDROLOGY;
   return config;
 }
 
@@ -46,6 +47,7 @@ export function generate(input = {}, { compact = false, onProgress } = {}) {
   }
   world.metrics = {
     generationMs: performance.now() - started, lakes: count, riverEdges: fields.edges,
+    headwaterPonds: fields.headwaters.length, headwaterSteps: fields.headwaterSteps,
     confluences: fields.confluences, falls: fields.falls.length,
     realms: world.realms.length, cities: world.towns.filter(t => t.fort || t.cityWall).length,
     villages: world.towns.filter(t => t.kind === 'village').length,
