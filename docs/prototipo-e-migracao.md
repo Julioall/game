@@ -4,16 +4,21 @@
 
 O repositório contém o protótipo executável. O mapa permite até 5.000 × 5.000 m. Há vilas, solares, castelos e grandes cidades. A câmera livre permite navegar, inspecionar o terreno, coletar madeira e pedra e construir uma cabana. A coleta e a construção persistem por configuração no navegador.
 
+O tamanho padrão e o menor tamanho oferecido pelo gerador são 1.024 × 1.024 m. URLs ainda podem carregar mapas menores já existentes.
+
 O modo experimental de travessia permite caminhar, vadear e nadar em superfícies naturais. Sua posição vale para a sessão. A integração com pontes, portas, interiores e tarefas continua nos próximos recortes. A [revisão da água e arquitetura](revisao-agua-arquitetura.md) registra contratos, limites e medições.
 
 | Área | Implementação |
 | --- | --- |
 | Terreno e água | `src/world/terrain/` separa relevo, hidrologia, drenagem e validação de solo. `src/world/generate.js` orquestra a geração. `src/render/terrain.js` gera a malha do terreno e `src/render/water.js` recorta a água nos mesmos triângulos. |
 | Vegetação e árvores | `src/world/ecology.js` classifica biomas. `src/world/vegetation.js` gera recursos e plantas por chunk, com IDs derivados da semente e das coordenadas globais. `src/render/vegetation.js` monta os modelos e as instâncias. A coleta resolve o alvo no mundo pelo ID. |
+| Fauna ambiente | `src/world/fauna-catalog.js` define as espécies; `src/world/fauna.js` distribui 1.024 indivíduos; `src/world/fauna-system.js`, pertencente ao `WorldState`, atualiza posições e índice móvel em passo fixo. `src/render/fauna.js` cuida apenas dos modelos e animações. [Auditoria e próximos recortes](auditoria-fauna.md). |
 | Construções | `src/world/construction.js` valida lotes com índices locais e `src/world/buildings.js` fornece dimensões, fundação e referência de entrada das casas. `src/render/structures.js` compõe a malha de construções com os módulos de casas, pontes e fortificações. |
 | Estado e apresentação | `src/world/state.js` aplica coleta e construção, mantém os deltas e fornece consultas de leitura para a visualização. `src/render/view.js` cuida da câmera, chunks visíveis e seleção. `src/main.js` conecta interface, plataforma e regras. |
 | Plataforma | `src/platform/world-worker.js` gera e transfere o mundo, depois encerra. `src/platform/local-save.js` usa a mesma chave e o mesmo formato de save do protótipo de origem. |
-| Testes e pesquisa | `test/world.test.js` cobre geração, ocupação e persistência. `tools/playtest.mjs` percorre o jogo no navegador. [Pesquisa e atribuições](pesquisa.md) registra referências e licenças. |
+| Testes e pesquisa | `test/world.test.js` e `test/fauna.test.js` cobrem geração, ocupação, persistência e candidatos de fauna. `tools/playtest.mjs` percorre o jogo no navegador. [Pesquisa e atribuições](pesquisa.md) e [avisos de terceiros](../THIRD_PARTY_NOTICES.md) registram referências e licenças. |
+
+A fauna mantém estado autoritativo de sessão separado de Three.js. Sua população, posições e deslocamento são independentes da criação ou descarte dos modelos. A região relevante para a fauna ambiente usa a posição do jogador ou o foco de exploração; animais distantes permanecem adormecidos. O save conserva a versão 1 e ainda não persiste fauna. O pacote não inclui atlas pronto e todos os animais enquadrados são elegíveis para construção gradual, com no máximo dois trabalhos de criação pendentes.
 
 A importação preservou o protótipo em um commit próprio. Os commits seguintes organizaram, em ordem, terreno e água, vegetação e árvores, e construções. O índice das construções considera a área de influência em mais de um chunk e aplica a mesma geometria de ocupação do protótipo. A planta inicial das casas fornece medidas e posição de entrada. Portas jogáveis e navegação interior são o próximo recorte.
 
@@ -53,6 +58,14 @@ O formato do save continua na versão 1. Como o terreno e a localização dos po
 
 ## Executar e verificar
 
-Use Node.js 24 e um navegador com WebGL 2. Rode `npm ci` e `npm run dev -- --port 5917`. Abra [o servidor local](http://127.0.0.1:5917/). A semente 1769 abre a vila com ponte.
+Use Node.js 24 e um navegador com WebGL 2. Rode `npm ci` (a dependência Git direta está autorizada em `.npmrc`) e `npm run dev -- --port 5917`. Abra [o servidor local](http://127.0.0.1:5917/). A semente 1769 abre a vila com ponte.
 
 Use `npm test`, `npm run build`, `npm run playtest` e `npm run benchmark:placement`. O playtest usa Chrome instalado ou Edge com `KINGDOM_BROWSER=msedge`. A variável `KINGDOM_URL` permite usar um servidor já aberto. Os relatórios ficam em `playtest-output/`.
+
+### Apresentação atual
+
+O botão Primeira pessoa oferece navegação de câmera à altura dos olhos com WASD e mouse; Esc retorna ao mapa. Colisões físicas com construções continuam pendentes.
+
+`src/render/pixel-art.js` aplica uma grade comum com nearest, cores em degraus, contornos coloridos por profundidade e dithering suave. Os presets usam aproximadamente 2/3/4 pixels de tela. Animais usam qualidade low e LOD 2; duas aparências por espécie reutilizam a construção, preservando IDs e sementes individuais no estado.
+
+A água identifica o rio por `waterRiver`, independente do cancelamento dos vetores nas curvas. A espuma de correnteza usa manchas suaves, preservando o acabamento dos lagos. As ondas costeiras misturam sinais com máscaras espaciais para interromper as frentes. A faixa visual de praia chega a 14 m nas costas baixas, com menos vegetação junto ao mar. O relevo e as chaves de save são preservados.

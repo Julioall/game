@@ -1,3 +1,4 @@
+import { FaunaSystem } from './fauna-system.js';
 import { STRUCTURES, TRAVERSAL_PROFILE, VERSION } from './catalog.js';
 import { addToChunk, chunkKey, indexTowns } from './chunks.js';
 import { findResource } from './vegetation.js';
@@ -16,6 +17,7 @@ export class WorldState {
   #removed;
   #built = new Map();
   #construction;
+  #fauna = null;
   #traveler = null;
   #travelTarget = null;
 
@@ -113,9 +115,15 @@ export class WorldState {
     this.#travelTarget = null;
   }
 
+  tickFauna(dt,region) { this.#fauna?.tick(dt,region); }
+
   presentation() {
+    this.#fauna ??= new FaunaSystem(this.#world,this.#index,{
+      isRemoved:id=>this.isRemoved(id), buildingsAt:key=>this.#built.get(key)??[]
+    });
     return Object.freeze({
       world: readOnlyWorld(this.#world),
+      fauna: this.#fauna.presentation(),
       index: this.#index,
       isRemoved: id => this.isRemoved(id),
       buildingsAt: key => this.#built.get(key)?.slice() ?? []

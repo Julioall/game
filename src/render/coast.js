@@ -11,11 +11,12 @@ float coastNoise(vec2 p) {
 vec2 coastalFront(vec2 q, float distance, vec2 coastNormal, float time,
                   vec2 direction, float frequency, float seed, float fragments) {
   float variation = coastNoise(q * .065 + seed);
-  float phase = time * frequency + dot(q, vec2(-direction.y, direction.x)) * .035
+  float phase = time * frequency + dot(q, vec2(-direction.y, direction.x)) * .002
     + variation * 1.4 + seed;
   float age = fract(phase);
   float exposure = .55 + .45 * abs(dot(coastNormal, direction));
-  float strength = smoothstep(.16, .67, variation) * exposure;
+  float packet=coastNoise(q*.20+vec2(seed,seed*.7));
+  float strength = smoothstep(.35,.68,packet) * smoothstep(.18, .65, variation) * exposure;
   float reach = mix(.65, 1.9, variation) * exposure;
   float advance = smoothstep(.035, .58, age);
   float retreat = smoothstep(.58, .99, age);
@@ -87,4 +88,22 @@ export function beachMesh(world, vertices, triangles, material) {
   mesh.renderOrder = 1;
   mesh.raycast = () => {};
   return mesh;
+}
+
+// Presentation-only distance to sea: preserves terrain generation and save identity.
+export function seaBeachDistance(world) {
+  const {stride}=world, length=stride*stride;
+  const distance=new Uint8Array(length).fill(255),queue=new Int32Array(length);
+  let tail=0;
+  for(let i=0;i<length;i++)if(world.waterKind.at(i)===1 && world.wet.at(i)>0){distance[i]=0;queue[tail++]=i;}
+  for(let head=0;head<tail;head++){
+    const i=queue[head],d=distance[i];if(d>=14)continue;
+    const x=i%stride,z=Math.floor(i/stride);
+    for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,nz=z+dz,j=nz*stride+nx;
+      if(nx<0||nz<0||nx>=stride||nz>=stride||distance[j]!==255)continue;
+      distance[j]=d+1;queue[tail++]=j;
+    }
+  }
+  return {at:i=>distance[i]};
 }

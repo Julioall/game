@@ -35,6 +35,10 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
     if (wet.at(i) > 0) base.lerp(loam, .44);
     if (grade > .6 && wet.at(i) <= 0 && biome.at(i) !== 9) base.lerp(cliff, clamp((grade - .6) * .84));
     if (config.style === 'spring' && [2, 3, 4, 10, 11].includes(biome.at(i))) base.g *= 1.19;
+    if(world.beachDistance && wet.at(i)<=0 && y<4.) {
+      const sandAmount=clamp((14.-world.beachDistance.at(i))/5.)*clamp((4.-y)/1.5);
+      base.lerp(palette[1],sandAmount);
+    }
     const plot = fields.find(f => Math.abs(f.x - x) <= 2 && Math.abs(f.z - z) <= 2);
     if (plot) base.copy((x - plot.x) % 2 ? fieldDark : fieldLight);
     if (forts.some(bounds => insideFort(bounds, x, z))) base.lerp(courtyard, .77);

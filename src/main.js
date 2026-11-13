@@ -1,8 +1,9 @@
 import './style.css';
 import { Vector3 } from 'three';
-import { BIOMES, CHUNK, DEFAULT, HYDROLOGY_VERSIONS, MAX_MAP_SIZE, SETTINGS, SPECIES } from './world/catalog.js';
+import { BIOMES, DEFAULT, HYDROLOGY_VERSIONS, MAX_MAP_SIZE, SETTINGS, SPECIES } from './world/catalog.js';
 import { configuration } from './world/generate.js';
 import { WorldState } from './world/state.js';
+import { gridSample } from './world/math.js';
 import { TRAVERSAL_TICK } from './world/traversal.js';
 import { WorldView } from './render/view.js';
 import { loadSave, savedGeneration, storeSave } from './platform/local-save.js';
@@ -199,6 +200,7 @@ function showRegion() {
 function loadWorld(config, preferSaved = true) {
   if (preferSaved) config = savedGeneration(config);
   worker?.terminate();
+  if(view?.firstPerson)setFirstPerson(false);
   endTravel();
   inspect();
   setBuilding(false);
@@ -275,6 +277,8 @@ function refresh() {
     ['Chunks ativos / cache', s.active + ' / ' + s.cached], ['Chamadas GPU', s.calls],
     ['Rios / descontinuidades', s.riverEdges + ' / ' + s.brokenRivers],
     ['Lagos / confluências', s.lakes + ' / ' + s.confluences],
+    ['Fauna próxima / ativa', s.faunaNearby + ' / ' + s.faunaActive],
+    ['Fauna pendente / falhas', s.faunaPending + ' / ' + s.faunaFailures],
     ['Declive > 63%', s.steepLand], ['Lotes ou vias inválidos', s.invalidSites],
     ['Copas sobrepostas', s.crowns],
     ['Reinos / grandes cidades', s.realms + ' / ' + s.metropolises],
@@ -291,11 +295,17 @@ function frame(now) {
   if (!dialog.open) {
     const x = Number(keys.has('d') || keys.has('arrowright')) - Number(keys.has('a') || keys.has('arrowleft'));
     const y = Number(keys.has('s') || keys.has('arrowdown')) - Number(keys.has('w') || keys.has('arrowup'));
-    if (traveler) {
+    if (view.firstPerson) {
+      view.walkFirstPerson(x,-y,dt/1000);
+    } else if (traveler) {
       const scale = Math.max(1, Math.hypot(x, y));
       travelFrame((x + y) * Math.SQRT1_2 / scale, (y - x) * Math.SQRT1_2 / scale, dt, now);
     } else if (x || y) view.pan(x * Math.min(dt, 48) * .46, y * Math.min(dt, 48) * .46);
   }
+  if(!dialog.open) state.tickFauna(Math.min(dt/1000,.1),{
+    x:traveler?.x??view.focus.x,z:traveler?.z??view.focus.z,
+    radius:Math.max(110,view.focus.span*Math.hypot(view.aspect,1))
+  });
   view.draw(motion.matches ? 0 : now / 1000);
   if (firstDraw) {
     $('loading').hidden = true;
@@ -313,11 +323,20 @@ function frame(now) {
 
 canvas.addEventListener('pointerdown', event => {
   if (!view || !event.isPrimary || event.button !== 0) return;
+  if (view.firstPerson) {
+    canvas.requestPointerLock?.()?.catch?.(() => message('Arraste para olhar ao redor.'));
+    pointer = {x:event.clientX,y:event.clientY,moved:true};
+    return;
+  }
   canvas.focus({ preventScroll: true });
   canvas.setPointerCapture(event.pointerId);
   pointer = { x: event.clientX, y: event.clientY, moved: false };
 });
 canvas.addEventListener('pointermove', event => {
+  if (view?.firstPerson) {
+    if (document.pointerLockElement === canvas || pointer) view.lookFirstPerson(event.movementX,event.movementY);
+    return;
+  }
   if (!pointer || !view || !event.isPrimary) return;
   if (!pointer.moved && Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) <= 5) return;
   pointer.moved = true;
@@ -339,7 +358,7 @@ canvas.addEventListener('lostpointercapture', () => {
 });
 canvas.addEventListener('wheel', event => {
   event.preventDefault();
-  if (!view) return;
+  if (!view || view.firstPerson) return;
   const bounds = canvas.getBoundingClientRect();
   const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? bounds.height : 1;
   const delta = Math.max(-160, Math.min(160, event.deltaY * units));
@@ -363,12 +382,29 @@ window.addEventListener('keydown', event => {
   }
   if (key === '+' || key === '=') view?.zoom(.85);
   if (key === '-') view?.zoom(1.18);
-  if (key === 'escape') { endTravel(); setBuilding(false); inspect(); }
+  if (key === 'escape') { setFirstPerson(false); endTravel(); setBuilding(false); inspect(); }
 });
 window.addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
 window.addEventListener('blur', () => keys.clear());
 window.addEventListener('resize', () => view?.resize());
+function setFirstPerson(enabled) {
+  if (!view) return;
+  endTravel();
+  setBuilding(false);
+  inspect();
+  view.setFirstPerson(enabled);
+  $('first-person').setAttribute('aria-pressed',String(enabled));
+  if (!enabled) document.exitPointerLock?.();
+  pointer=null;
+  keys.clear();
+  if(enabled) message('WASD para andar · clique e mova o mouse para olhar · Esc volta ao mapa');
+}
+$('first-person').onclick = () => {
+  setFirstPerson(!view?.firstPerson);
+  if(view?.firstPerson) canvas.requestPointerLock?.()?.catch?.(()=>{});
+};
 $('traverse').onclick = () => {
+  if(view?.firstPerson)setFirstPerson(false);
   if (!view || !$('loading').hidden) return;
   if (choosingStart || traveler) return endTravel();
   setBuilding(false);
@@ -414,9 +450,6 @@ map.addEventListener('click', event => {
   view.go((event.clientX - bounds.left) / bounds.width * size, (event.clientY - bounds.top) / bounds.height * size);
 });
 
-for (let size = CHUNK * 4; size <= CHUNK * 24; size += CHUNK) {
-  form.elements.size.add(new Option(size + ' × ' + size + ' m', size));
-}
 for (const size of [1024, 1536, 2048, 3072, 4096, MAX_MAP_SIZE]) {
   form.elements.size.add(new Option(size + ' × ' + size + ' m', size));
 }
@@ -462,7 +495,16 @@ if (new URLSearchParams(location.search).has('qa')) {
   window.kingdomQA = {
     stats: () => view && stats(), resetFrames: () => { intervals.length = 0; },
     focus: () => ({ ...view.focus }), go: (x, z, span) => view.go(x, z, span),
-    state: () => state.snapshot(), world: () => view.world.config,
+    fauna: () => view?.faunaActors.diagnostics(),
+    faunaActors: () => [...(view?.faunaActors.actors.values() ?? [])].map(({ animal, record }) => ({
+      id: record.id, species: record.species, x: record.x, y: record.y, z: record.z,
+      screen: (() => { point.set(record.x, record.y, record.z).project(view.camera); return {
+        x: (point.x + 1) * canvas.clientWidth / 2, y: (1 - point.y) * canvas.clientHeight / 2
+      }; })(),
+      animal: { x: animal.position.x, y: animal.position.y, z: animal.position.z }
+    })),
+    state: () => state?.snapshot(), world: () => view && view.world.config,
+    groundAt: (x, z) => gridSample(view.world.ground, view.world.stride, x, z),
     waterAt: (x, z) => state.waterAt(x, z),
     traveler: () => state.traveler,
     walkway: id => view.world.towns[id]?.fort?.walkway,

@@ -28,6 +28,7 @@ export function oceanGeometry(size) {
   geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('waterDepth', new T.Float32BufferAttribute(new Float32Array(count).fill(5), 1));
   geometry.setAttribute('bank', new T.Float32BufferAttribute(new Float32Array(count).fill(2), 1));
+  geometry.setAttribute('waterRiver',new T.Float32BufferAttribute(new Float32Array(count),1));
   geometry.setAttribute('waterMotion', new T.Int8BufferAttribute(motion, 3, true));
   geometry.setAttribute('waterBed', new T.Uint8BufferAttribute(new Uint8Array(count * 3), 3, true));
   geometry.setAttribute('waterMix', new T.Int8BufferAttribute(new Int8Array(count * 3), 3, true));
@@ -56,14 +57,16 @@ function blendedMotion(world, { x, z, kind }) {
 
 function shadeShore(shore, from, to, t) {
   shore.motion = (from.kind ? from : to).motion;
+  shore.riverStyle = (from.kind ? from : to).riverStyle;
   shore.mixing = [0, 0, 0];
   shore.bed = from.bed.map((value, i) => mix(value, to.bed[i], t));
 }
 
 export function waterMesh(world, vertices, triangles, colors, material, mouths = []) {
-  const water = [], depth = [], banks = [], motion = [], bed = [], mixing = [];
+  const water = [], depth = [], banks = [], motion = [], bed = [], mixing = [], rivers = [];
   for (let i = 0; i < vertices.length; i++) {
     const vertex = vertices[i];
+    vertex.riverStyle = vertex.kind >= 3 ? 1 : 0;
     vertex.bed = colors.slice(i * 3, i * 3 + 3);
     if (vertex.kind) {
       const base = blendedMotion(world, vertex);
@@ -80,6 +83,7 @@ export function waterMesh(world, vertices, triangles, colors, material, mouths =
         water.push(vertex.x, vertex.y + WATER_OFFSET, vertex.z);
         depth.push(vertex.depth);
         banks.push(vertex.mask);
+        rivers.push(vertex.riverStyle ?? 0);
         const [dx, dz, sea] = vertex.motion;
         motion.push(Math.round(dx * 127), Math.round(dz * 127), Math.round(sea * 127));
         for (const value of vertex.mixing) mixing.push(Math.round(clamp(value, -1, 1) * 127));
@@ -93,6 +97,7 @@ export function waterMesh(world, vertices, triangles, colors, material, mouths =
     geometry.setAttribute('position', new T.Float32BufferAttribute(water, 3));
     geometry.setAttribute('waterDepth', new T.Float32BufferAttribute(depth, 1));
     geometry.setAttribute('bank', new T.Float32BufferAttribute(banks, 1));
+    geometry.setAttribute('waterRiver',new T.Float32BufferAttribute(rivers,1));
     geometry.setAttribute('waterMotion', new T.Int8BufferAttribute(motion, 3, true));
     geometry.setAttribute('waterBed', new T.Uint8BufferAttribute(bed, 3, true));
     geometry.setAttribute('waterMix', new T.Int8BufferAttribute(mixing, 3, true));

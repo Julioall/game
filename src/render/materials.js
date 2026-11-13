@@ -121,6 +121,7 @@ export function waterMaterial(clock) {
       #include <common>
       attribute float waterDepth;
       attribute float bank;
+      attribute float waterRiver;
       attribute vec3 waterMotion;
       attribute vec3 waterBed;
       attribute vec3 waterMix;
@@ -129,12 +130,14 @@ export function waterMaterial(clock) {
       varying vec3 bed;
       varying vec3 mixing;
       varying float depth, edge;
+      varying float riverStyle;
       #include <fog_pars_vertex>
       #include <shadowmap_pars_vertex>
       void main() {
         p = position;
         depth = waterDepth;
         edge = bank;
+        riverStyle = waterRiver;
         motion = waterMotion;
         bed = waterBed;
         mixing = waterMix;
@@ -153,6 +156,7 @@ export function waterMaterial(clock) {
       varying vec3 bed;
       varying vec3 mixing;
       varying float depth, edge;
+      varying float riverStyle;
       #include <common>
       #include <fog_pars_fragment>
       #include <bsdfs>
@@ -169,7 +173,10 @@ export function waterMaterial(clock) {
                    mix(hashCell(cell + vec2(0., 1.)), hashCell(cell + 1.), t.x), t.y);
       }
       float riverFoam(vec2 p, vec2 flow) {
-        return waterNoise(p * 2.3) * .56 + waterNoise((p + flow * .56) * 1.05) * .44;
+        vec2 direction=flow/max(length(flow),.001);
+        vec2 local=vec2(dot(p,direction),dot(p,vec2(-direction.y,direction.x)));
+
+        return coastNoise(local*vec2(.55,1.3))*.65 + coastNoise(local*vec2(1.1,2.2))* .35;
       }
       float mouthEddy(vec2 local, float time, float spin) {
         float radius = length(local);
@@ -193,15 +200,23 @@ export function waterMaterial(clock) {
         // Blend the wave signals instead of the frequency to avoid compressed crests at the mouth.
         vec2 lakeWave = vec2(1.25, 1.73), seaWave = vec2(.46, .74);
         float lakePhase = dot(q, lakeWave) - kingdomTime * .58 + warp * 3.6;
-        float seaPhase = dot(q, seaWave) - kingdomTime * 1.45 + warp * 2.8;
-        float receiver = mix(sin(lakePhase), sin(seaPhase), sea);
+        // Positive depth increases offshore: +time sends crests toward shallower water.
+        vec2 seaGradient=coastGradient(q,depth);
+        float nearCoast=1.-smoothstep(3.,8.,depth);
+        float offshorePhase=dot(q,seaWave)-kingdomTime*1.45+warp*2.8;
+        float seaPhase=depth*.85+kingdomTime*1.05+warp*.35;
+        float packets=smoothstep(.28,.72,coastNoise(q*.12+vec2(kingdomTime*.025,0.)));
+        float seaSignal=mix(sin(offshorePhase),sin(seaPhase),nearCoast)*packets;
+        vec2 seaSlope=mix(seaWave*cos(offshorePhase),seaGradient*.85*cos(seaPhase),nearCoast)*packets;
+        seaWave=mix(seaWave,normalize(seaGradient+vec2(.00001))*max(.12,length(seaGradient)*2.8),nearCoast);
+        float receiver = mix(sin(lakePhase), seaSignal, sea);
         lakePhase += current * (advected - .5) * 5.2;
         seaPhase += current * (advected - .5) * 3.6;
-        float fine = dot(q, vec2(3.8, -2.05)) - kingdomTime * 1.08 - warp * 5.2;
-        float wave = mix(sin(lakePhase), sin(seaPhase), sea) * .65 + sin(fine) * .35;
-        vec2 slope = mix(lakeWave * cos(lakePhase) * .026, seaWave * cos(seaPhase) * .12, sea)
-          + vec2(.045, -.025) * cos(fine)
-          + vec2(.026, .023) * mix(cos(lakePhase * 1.86 + fine * .31), cos(seaPhase * 1.86 + fine * .31), sea);
+        float fine = dot(q, vec2(1.1, -.65)) - kingdomTime * .7 - warp * 2.;
+        float wave = mix(sin(lakePhase), seaSignal, sea) * .8 + sin(fine) * .2;
+        vec2 slope = mix(lakeWave * cos(lakePhase) * .026, seaSlope * .085, sea)
+          + vec2(.018, -.012) * cos(fine)
+          + vec2(.026, .023) * mix(cos(lakePhase * 1.86 + fine * .31), (coastNoise(q*.4+kingdomTime*.06)-.5), sea);
         vec2 acrossFlow = vec2(-motion.y, motion.x);
         slope = slope * (1. - current * .48)
           + motion.xy * (advected - .5) * .24
@@ -237,7 +252,7 @@ export function waterMaterial(clock) {
         vec3 tintedBed = bed * vec3(.82, .96, .91) * mix(.93, 1.06, sand);
         color = mix(color, tintedBed, bottom);
         color = mix(color, vec3(.26, .38, .43), sky * (.22 + absorb * .26));
-        color += vec3(.105, .13, .14) * glint * (.32 + absorb * .68) * (.55 + warp * .45);
+        color += vec3(.105, .13, .14) * glint * (1.-riverStyle) * (.32 + absorb * .68) * (.55 + warp * .45);
 
         float coast = sea * (1. - current * .87);
         vec2 shoreGradient = coastGradient(q, depth);
@@ -247,23 +262,26 @@ export function waterMaterial(clock) {
         }
         float grade = length(vec2(dFdx(p.y), dFdy(p.y)))
           / max(.001, length(vec2(length(dFdx(q)), length(dFdy(q)))));
-        if (current > 0.) {
+        if (riverStyle > .01) {
           float shallow = (1. - smoothstep(.13, .55, edge)) * smoothstep(.025, .13, depth);
           float rapids = smoothstep(.14, .72, grade);
-          float streaks = smoothstep(.55, .82, advected);
-          foam += current * streaks * (.22 + shallow * .30 + rapids * .52);
-          color += vec3(.022, .038, .039) * current * (advected - .5);
+          float broadFoam=coastNoise(q*.48-motion.xy*kingdomTime*.32+vec2(kingdomTime*.025,0.));
+          float streaks = smoothstep(.60,.80,broadFoam);
+          foam += riverStyle * streaks * (.30 + shallow * .08 + rapids * .10);
+
         }
-        foam += transition * (collision * (.12 + advected * .16)
-          + smoothstep(.15, .8, eddies) * .16);
+
+        foam += transition * smoothstep(.65,.9,collision)*.12;
         color *= mix(vec3(1.), vec3(1.075, 1.025, .94), transition * (.45 + eddies * .16));
+
         color = mix(color, vec3(.62, .72, .69), clamp(foam, 0., .8));
+
         if (ripple.w > 0.) {
           float crest = abs(length(q - ripple.xy) - (.18 + ripple.z * 1.8));
           float ring = (1. - smoothstep(.045, .16, crest)) * (1. - ripple.z);
           color += vec3(.23, .35, .32) * ring * ripple.w;
         }
-        color *= .985 + dither4(gl_FragCoord.xy) * .03;
+        color *= mix(1.,.985 + dither4(gl_FragCoord.xy) * .03,1.-riverStyle);
         color *= mix(vec3(.38, .51, .63), vec3(1.), getShadowMask());
         gl_FragColor = vec4(color, 1.);
         #include <tonemapping_fragment>

@@ -68,7 +68,7 @@ try {
   const page = await browser.newPage({ viewport });
   const errors = watch(page);
   const startVillage = performance.now();
-  await page.goto(url + '/?qa=1');
+  await page.goto(url + '/?qa=1&size=1024');
   await settle(page);
   const villageReadyMs = performance.now() - startVillage;
   const hardware = await page.evaluate(() => {
@@ -82,6 +82,15 @@ try {
   assert.equal(measurements.village.brokenRivers, 0);
   assert.equal(measurements.village.invalidSites, 0);
   await page.screenshot({ path: output + '/vila.png' });
+  const firstPersonStart=await page.evaluate(()=>window.kingdomQA.focus());
+  await page.locator('#first-person').click();
+  await page.keyboard.down('w');await page.waitForTimeout(350);await page.keyboard.up('w');
+  const firstPersonMoved=await page.evaluate(()=>window.kingdomQA.focus());
+  assert.ok(Math.hypot(firstPersonMoved.x-firstPersonStart.x,firstPersonMoved.z-firstPersonStart.z)>.1);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#first-person').getAttribute('aria-pressed'),'false');
+  await page.evaluate(({x,z,span})=>window.kingdomQA.go(x,z,span),firstPersonStart);
+  await settle(page);
   const home = await page.evaluate(() => window.kingdomQA.focus());
   await page.mouse.move(840, 450);
   await page.mouse.wheel(0, -100);
@@ -117,7 +126,9 @@ try {
     assert.equal((await page.evaluate(() => window.kingdomQA.focus())).x, capital.x);
     await page.screenshot({ path: output + '/capital-' + capital.id + '.png' });
   }
-  assert.equal(await page.evaluate(id => window.kingdomQA.walkway(id).edges.filter(edge => edge.kind === 'escada').length, capitals[0].id), 4);
+  const fortifiedCapital = capitals.find(capital => capital.gate);
+  assert.ok(fortifiedCapital, 'Expected a fortified city in the generated realm');
+  assert.equal(await page.evaluate(id => window.kingdomQA.walkway(id).edges.filter(edge => edge.kind === 'escada').length, fortifiedCapital.id), 4);
   await page.locator('#diagnose').click();
   await page.locator('#walkways').click();
   assert.equal(await page.locator('#walkways').getAttribute('aria-pressed'), 'true');
@@ -166,19 +177,50 @@ try {
   assert.equal(await page.locator('#inspect strong').innerText({ timeout: 3000 }), 'Lago');
   assert.match(await page.locator('#inspect small').innerText(), /^Profundidade [\d,]+ m$/);
   await page.screenshot({ path: output + '/lago.png' });
+  const route = await page.evaluate(() => {
+    const qa = window.kingdomQA, focus = qa.focus(), size = qa.world().size;
+    const directions = [
+      { x: -Math.SQRT1_2, z: -Math.SQRT1_2, key: 'w' },
+      { x: Math.SQRT1_2, z: -Math.SQRT1_2, key: 'd' },
+      { x: Math.SQRT1_2, z: Math.SQRT1_2, key: 's' },
+      { x: -Math.SQRT1_2, z: Math.SQRT1_2, key: 'a' }
+    ];
+    for (let radius = 0; radius <= 120; radius += 2) {
+      for (let oz = -radius; oz <= radius; oz += 2) for (let ox = -radius; ox <= radius; ox += 2) {
+        if (radius && Math.abs(ox) < radius && Math.abs(oz) < radius) continue;
+        const x = focus.x + ox, z = focus.z + oz;
+        if (x < 4 || z < 4 || x >= size - 4 || z >= size - 4 || qa.waterAt(x, z)) continue;
+        for (const direction of directions) {
+          let wade = false;
+          for (let distance = 1; distance <= 36; distance++) {
+            const water = qa.waterAt(x + direction.x * distance, z + direction.z * distance);
+            const mode = water?.depth >= 1 ? 'swim' : water?.depth >= .15 ? 'wade' : 'walk';
+            if (mode === 'wade') wade = true;
+            if (wade && mode === 'swim' && water.kind === 'lake') {
+              return { x, z, key: direction.key };
+            }
+            if (wade && mode === 'walk') break;
+          }
+        }
+      }
+    }
+    return null;
+  });
+  assert.ok(route, 'Could not find a walk-to-wade-to-swim route by the lake');
+  await page.evaluate(({ x, z }) => window.kingdomQA.go(x, z, 22), route);
+  await settle(page);
   await page.locator('#traverse').click();
-  // A gentle bank in the default seed supports the same route in both directions.
-  const bank = await page.evaluate(() => window.kingdomQA.project(132, 8.4405, 107));
+  const bank = await page.evaluate(({ x, z }) => window.kingdomQA.project(x, window.kingdomQA.groundAt(x, z), z), route);
   await page.mouse.click(bank.x, bank.y);
   const travelMode = mode => page.waitForFunction(mode => window.kingdomQA.traveler()?.mode === mode, mode, { timeout: 7000 });
   await travelMode('walk');
-  await page.keyboard.down('w');
+  await page.keyboard.down(route.key);
   await travelMode('wade');
   await travelMode('swim');
-  await page.keyboard.up('w');
+  await page.keyboard.up(route.key);
   assert.equal(await page.locator('#travel-mode').innerText(), 'Nadando');
   await page.screenshot({ path: output + '/travessia.png' });
-  const returnPoint = await page.evaluate(() => window.kingdomQA.project(132, 8.4405, 107));
+  const returnPoint = await page.evaluate(({ x, z }) => window.kingdomQA.project(x, window.kingdomQA.groundAt(x, z), z), route);
   await page.mouse.click(returnPoint.x, returnPoint.y);
   await travelMode('wade');
   await travelMode('walk');
@@ -191,7 +233,7 @@ try {
 
   await page.locator('#settings').click();
   await page.locator('[name=seed]').fill('9057');
-  await page.locator('[name=size]').selectOption('768');
+  await page.locator('[name=size]').selectOption('1024');
   await page.locator('[name=vegetation]').press('End');
   await page.locator('[name=rivers]').evaluate(input => {
     input.value = '.78';

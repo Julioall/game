@@ -13,12 +13,12 @@ import { sampleWater } from '../src/world/terrain/water.js';
 import { stepTraversal, traversalSurface } from '../src/world/traversal.js';
 import { loadSave, savedGeneration } from '../src/platform/local-save.js';
 import { mouthFlow } from '../src/world/terrain/water-flow.js';
-
-const world = generate();
+// Keep seed-specific test coordinates stable while the normal map preset is 1,024 m.
+const world = generate({ ...DEFAULT, size: 256 });
 const index = indexTowns(world);
 
 test('mouth beds deepen the connection without changing the waterline', () => {
-  const previous = generate({ hydrology: 3 });
+  const previous = generate({ size: world.config.size, hydrology: 3 });
   assert.deepEqual(world.wet, previous.wet);
   assert.deepEqual(world.surface, previous.surface);
   let deepened = 0;
@@ -81,7 +81,7 @@ test('lake inlets meet the lake level and no longer consist of a short detached 
 });
 
 test('each channel source becomes a pond with a wet downhill outlet', () => {
-  const previous = generate({ hydrology: 2 });
+  const previous = generate({ size: world.config.size, hydrology: 2 });
   const hasUpstream = new Uint8Array(previous.river.length);
   for (let i = 0; i < previous.river.length; i++) if (previous.river[i]) hasUpstream[previous.downstream[i]] = 1;
   let sources = 0;
@@ -96,7 +96,7 @@ test('each channel source becomes a pond with a wet downhill outlet', () => {
   }
   assert.ok(sources > 0);
   assert.equal(world.metrics.headwaterPonds, sources);
-  assert.equal(generate({ lakes: 0 }).metrics.headwaterPonds, 0);
+  assert.equal(generate({ size: world.config.size, lakes: 0 }).metrics.headwaterPonds, 0);
 });
 
 test('source groves add local trees and rocks with resolvable resource IDs', () => {
@@ -123,7 +123,7 @@ test('source groves add local trees and rocks with resolvable resource IDs', () 
 });
 
 test('old saves select the original hydrology and retain their terrain', () => {
-  const config = configuration();
+  const config = configuration({ size: 256 });
   const { hydrology, ...legacyKeyConfig } = config;
   const oldSave = { version: 1, removed: ['t:1:2'], buildings: [], inventory: { wood: 3, stone: 0 } };
   const legacyKey = 'kingdom:1:' + JSON.stringify(legacyKeyConfig);
@@ -227,7 +227,7 @@ test('water queries follow the clipped shore and report depth and downstream dir
   assert.equal(sampleWater(shore, -1, 0), null);
   assert.equal(sampleWater(shore, NaN, 0), null);
 
-  const compact = generate(DEFAULT, { compact: true });
+  const compact = generate({ ...DEFAULT, size: world.config.size }, { compact: true });
   assert.deepEqual(compact.waterKind, world.waterKind);
   const state = new WorldState(compact);
   for (const [code, kind] of [[1, 'sea'], [2, 'lake'], [3, 'river']]) {
@@ -248,8 +248,8 @@ const fingerprint = w => {
 };
 
 test('the same configuration reproduces terrain, climate, rivers, and settlements', () => {
-  assert.equal(fingerprint(world), fingerprint(generate(DEFAULT)));
-  assert.notEqual(fingerprint(world), fingerprint(generate({ seed: 42 })));
+  assert.equal(fingerprint(world), fingerprint(generate({ ...DEFAULT, size: world.config.size })));
+  assert.notEqual(fingerprint(world), fingerprint(generate({ seed: 42, size: world.config.size })));
   assert.equal(configuration({ size: 4, rivers: 8, seed: -1 }).size, 128);
   assert.equal(configuration({ size: 4, rivers: 8, seed: -1 }).rivers, 1);
   assert.equal(configuration({ size: 4, rivers: 8, seed: -1 }).seed, 4294967295);

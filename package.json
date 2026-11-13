@@ -7,13 +7,15 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --test",
+    "test": "node --test test/*.test.js",
     "playtest": "node tools/playtest.mjs",
+    "audit:fauna": "node tools/audit-fauna.mjs",
     "benchmark:placement": "node tools/benchmark-placement.mjs",
     "benchmark:water": "node --expose-gc tools/benchmark-water.mjs"
   },
   "dependencies": {
     "flatqueue": "2.0.3",
+    "procedural-animals": "github:majidmanzarpour/threejs-procedural-animals#c95ae49346aa8e140a924376cec6cf0073d99512",
     "simplex-noise": "4.0.3",
     "three": "0.187.0"
   },

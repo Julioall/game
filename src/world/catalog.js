@@ -10,7 +10,7 @@ export const TRAVERSAL_PROFILE = Object.freeze({
   groundGrade: .85, waterGrade: 1.2
 });
 export const DEFAULT = Object.freeze({
-  seed: 1769, size: 256, water: .42, relief: .64, climate: .50,
+  seed: 1769, size: 1024, water: .42, relief: .64, climate: .50,
   vegetation: .68, rivers: .52, lakes: .55, settlements: .36,
   style: 'autumn', detail: 'balanced'
 });
