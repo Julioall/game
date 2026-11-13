@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "flatqueue": "2.0.3",
-    "procedural-animals": "github:majidmanzarpour/threejs-procedural-animals#c95ae49346aa8e140a924376cec6cf0073d99512",
+    "procedural-animals": "git+https://github.com/majidmanzarpour/threejs-procedural-animals.git#c95ae49346aa8e140a924376cec6cf0073d99512",
     "simplex-noise": "4.0.3",
     "three": "0.187.0"
   },
