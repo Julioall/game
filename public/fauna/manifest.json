@@ -1,0 +1,390 @@
+{
+  "revision": "c95ae49346aa8e140a924376cec6cf0073d99512",
+  "quality": "low",
+  "models": [
+    {
+      "species": "wolf",
+      "seed": 1769,
+      "file": "wolf-1769.animal.gz",
+      "bytes": 939644,
+      "vertices": 13274,
+      "sha256": "8c85afa3df133bd3573c96090b910cb3a6e18f83bb0486f586693277727eb7f6"
+    },
+    {
+      "species": "wolf",
+      "seed": 1770,
+      "file": "wolf-1770.animal.gz",
+      "bytes": 950503,
+      "vertices": 13491,
+      "sha256": "9384ece84b354b14b761ec77a89191756cf91fe44705c3096051b5eb1469f119"
+    },
+    {
+      "species": "fox",
+      "seed": 1769,
+      "file": "fox-1769.animal.gz",
+      "bytes": 899717,
+      "vertices": 13243,
+      "sha256": "7c6f9eb3df745ef48ee6e9d0349aa39ba8183f3827016936537f38a695914c68"
+    },
+    {
+      "species": "fox",
+      "seed": 1770,
+      "file": "fox-1770.animal.gz",
+      "bytes": 905148,
+      "vertices": 13339,
+      "sha256": "7356761f04522cbd189d619d101f3e3611aaa1a5ace820797a90b3930beb03ab"
+    },
+    {
+      "species": "deer",
+      "seed": 1769,
+      "file": "deer-1769.animal.gz",
+      "bytes": 646203,
+      "vertices": 9645,
+      "sha256": "8f6bdcc435f9b2473ad1385b754b2ffe5a32af9b137725e067ee3c19ebd4c02a"
+    },
+    {
+      "species": "deer",
+      "seed": 1770,
+      "file": "deer-1770.animal.gz",
+      "bytes": 689091,
+      "vertices": 10377,
+      "sha256": "7b443b3f57a9087d469abbfe8175071aee138adcd2843f304de29c90be767042"
+    },
+    {
+      "species": "boar",
+      "seed": 1769,
+      "file": "boar-1769.animal.gz",
+      "bytes": 699066,
+      "vertices": 10600,
+      "sha256": "276e7a7e7a8f95b7576dadf6a5b5a8e5ceaee3223db6f869818073e3b8647f1b"
+    },
+    {
+      "species": "boar",
+      "seed": 1770,
+      "file": "boar-1770.animal.gz",
+      "bytes": 777182,
+      "vertices": 11981,
+      "sha256": "0eb0ebe033623b36fc99f458e5ab46f9bc2769e8739c65d6d09cc25ecc5e9256"
+    },
+    {
+      "species": "horse",
+      "seed": 1769,
+      "file": "horse-1769.animal.gz",
+      "bytes": 858805,
+      "vertices": 12901,
+      "sha256": "2e32b9064120768a7148999366c5688a7a6b0e84e33db521d1ddf6feb12e4e8c"
+    },
+    {
+      "species": "horse",
+      "seed": 1770,
+      "file": "horse-1770.animal.gz",
+      "bytes": 866982,
+      "vertices": 12980,
+      "sha256": "1676fba4f0ba23a340baba5eeae6dad9bc04a5451b51aca6b7349baf37ae929c"
+    },
+    {
+      "species": "cow",
+      "seed": 1769,
+      "file": "cow-1769.animal.gz",
+      "bytes": 820366,
+      "vertices": 12868,
+      "sha256": "554d0258bc15eb1afee100f00a340e60e78b346d92521f6f74218fa460b1f3e5"
+    },
+    {
+      "species": "cow",
+      "seed": 1770,
+      "file": "cow-1770.animal.gz",
+      "bytes": 760031,
+      "vertices": 11833,
+      "sha256": "eb44c200ec880141defaf1c3bed06c762ada19a646546ed2632958eb28136d12"
+    },
+    {
+      "species": "sheep",
+      "seed": 1769,
+      "file": "sheep-1769.animal.gz",
+      "bytes": 894392,
+      "vertices": 9191,
+      "sha256": "9c698b90d111ee9700370a453a292c81595428421370a67b03ddeb949bd6c8f6"
+    },
+    {
+      "species": "sheep",
+      "seed": 1770,
+      "file": "sheep-1770.animal.gz",
+      "bytes": 587949,
+      "vertices": 8645,
+      "sha256": "556fa496a17ac140326daa8f8baca8063970f74395f447ee70353f2a2ecfd300"
+    },
+    {
+      "species": "goat",
+      "seed": 1769,
+      "file": "goat-1769.animal.gz",
+      "bytes": 867837,
+      "vertices": 13268,
+      "sha256": "6f87bfd8cba2ca2135f337033364c0541b23425908ee16d0e0c654a1b515a4a6"
+    },
+    {
+      "species": "goat",
+      "seed": 1770,
+      "file": "goat-1770.animal.gz",
+      "bytes": 779790,
+      "vertices": 11465,
+      "sha256": "a1224279b11df383801eb2e983bcb743a9c4bb3365e3cd3bee808feca2533221"
+    },
+    {
+      "species": "rabbit",
+      "seed": 1769,
+      "file": "rabbit-1769.animal.gz",
+      "bytes": 778329,
+      "vertices": 11834,
+      "sha256": "abe199e3a24c54d47ed74484898b6ed67ca09b93a613e126db952d13f0997079"
+    },
+    {
+      "species": "rabbit",
+      "seed": 1770,
+      "file": "rabbit-1770.animal.gz",
+      "bytes": 781789,
+      "vertices": 11893,
+      "sha256": "ea7753b68fdb83ff0b1fc0171fdd74cc45651527208cf9638747752f1440b032"
+    },
+    {
+      "species": "bear",
+      "seed": 1769,
+      "file": "bear-1769.animal.gz",
+      "bytes": 949566,
+      "vertices": 13636,
+      "sha256": "568466d47f74f422e0506b0669e52c288c5a32dbdf81c53c49b99c8743c20524"
+    },
+    {
+      "species": "bear",
+      "seed": 1770,
+      "file": "bear-1770.animal.gz",
+      "bytes": 965609,
+      "vertices": 13842,
+      "sha256": "3de2da4c67bf83e5e9b3d2409a4781dde247ad9413a696eae7bfbf0d3708bba1"
+    },
+    {
+      "species": "chicken",
+      "seed": 1769,
+      "file": "chicken-1769.animal.gz",
+      "bytes": 876608,
+      "vertices": 15578,
+      "sha256": "b308fa26a478da818ab6690a81d20632647deb88f308f4877ada4714f3ba6f58"
+    },
+    {
+      "species": "chicken",
+      "seed": 1770,
+      "file": "chicken-1770.animal.gz",
+      "bytes": 885166,
+      "vertices": 15639,
+      "sha256": "0eacd9560e1b6fa9d812d715eb164e2e4617a0e0646b4361c1dcff2a2d6459bf"
+    },
+    {
+      "species": "dog",
+      "seed": 1769,
+      "file": "dog-1769.animal.gz",
+      "bytes": 860826,
+      "vertices": 12607,
+      "sha256": "482d5a1bb912933c1795f5851da93b5ec202bb40e5b5aafb3e2f15d898c83d10"
+    },
+    {
+      "species": "dog",
+      "seed": 1770,
+      "file": "dog-1770.animal.gz",
+      "bytes": 859854,
+      "vertices": 12573,
+      "sha256": "599521a637cd0baa7bc89fea4142b44c0b5785e10ae262a86a1b1383be8b6f50"
+    },
+    {
+      "species": "pig",
+      "seed": 1769,
+      "file": "pig-1769.animal.gz",
+      "bytes": 1017157,
+      "vertices": 13963,
+      "sha256": "218b9b6053db59d85e1e23ce87285b7396910dd10b547f6a14302cf15a7000e8"
+    },
+    {
+      "species": "pig",
+      "seed": 1770,
+      "file": "pig-1770.animal.gz",
+      "bytes": 1055747,
+      "vertices": 14583,
+      "sha256": "71e78e643b9a4d8c39658858ad981a8aab73bd586d50bb299472bf2d0f99d09e"
+    },
+    {
+      "species": "cat",
+      "seed": 1769,
+      "file": "cat-1769.animal.gz",
+      "bytes": 932723,
+      "vertices": 11610,
+      "sha256": "32f164adb4596899928b148d54b294dc9b4f13cc3f5d9f9c52283072459a9dfb"
+    },
+    {
+      "species": "cat",
+      "seed": 1770,
+      "file": "cat-1770.animal.gz",
+      "bytes": 825464,
+      "vertices": 11817,
+      "sha256": "79843bfaaa360e9c82478ba9597867198006c1092209fe3fcedd98b1f8ef19ad"
+    },
+    {
+      "species": "rat",
+      "seed": 1769,
+      "file": "rat-1769.animal.gz",
+      "bytes": 613307,
+      "vertices": 9411,
+      "sha256": "fc6caddf83e65c4078eae050eb2004b639a0b236148a99a75f45b95d248ba13c"
+    },
+    {
+      "species": "rat",
+      "seed": 1770,
+      "file": "rat-1770.animal.gz",
+      "bytes": 616923,
+      "vertices": 9471,
+      "sha256": "99c187bf2852bb73e86dff14803672072a34f30a67a41bfb641b42a7b192077c"
+    },
+    {
+      "species": "frog",
+      "seed": 1769,
+      "file": "frog-1769.animal.gz",
+      "bytes": 708443,
+      "vertices": 10542,
+      "sha256": "ba0b7340668d4b3e97109ad381a662431b7b5a6152cf14fe2bf47fa0d39ba1f4"
+    },
+    {
+      "species": "frog",
+      "seed": 1770,
+      "file": "frog-1770.animal.gz",
+      "bytes": 706636,
+      "vertices": 10508,
+      "sha256": "7e7e3416d026838b6afc633b680056cf61d2207940be3f477ec14d7e35dff15b"
+    },
+    {
+      "species": "snake",
+      "seed": 1769,
+      "file": "snake-1769.animal.gz",
+      "bytes": 881641,
+      "vertices": 12631,
+      "sha256": "5fd836fc8c4ae365e551f3a86c2e282c22c95e2fbcf7b2182038e6d4a9b2a72c"
+    },
+    {
+      "species": "snake",
+      "seed": 1770,
+      "file": "snake-1770.animal.gz",
+      "bytes": 862596,
+      "vertices": 12348,
+      "sha256": "9afcba4ce5be656d82cf0d4c6aaf3bb4dec548c370c255bd9a3f5dd2b4ee0fe2"
+    },
+    {
+      "species": "spider",
+      "seed": 1769,
+      "file": "spider-1769.animal.gz",
+      "bytes": 931160,
+      "vertices": 13833,
+      "sha256": "63ff31d83d15856c250a618b11925a0d533bb0697f61a8b340a9d5cd59e3ffe3"
+    },
+    {
+      "species": "spider",
+      "seed": 1770,
+      "file": "spider-1770.animal.gz",
+      "bytes": 924399,
+      "vertices": 13691,
+      "sha256": "9721de69005c742986ddf1f02b2ff16f44c346f3ea1e688a8e4dad6d21f0e147"
+    },
+    {
+      "species": "crow",
+      "seed": 1769,
+      "file": "crow-1769.animal.gz",
+      "bytes": 804585,
+      "vertices": 14346,
+      "sha256": "72637d89063f97fead284b4279cc9e60003bea8d70e96f64d146d242b9b34474"
+    },
+    {
+      "species": "crow",
+      "seed": 1770,
+      "file": "crow-1770.animal.gz",
+      "bytes": 804835,
+      "vertices": 14346,
+      "sha256": "8d334538fcf836cb096ba1328fdf1a4e2c9e57e6ee2320cdfd04196102192c50"
+    },
+    {
+      "species": "eagle",
+      "seed": 1769,
+      "file": "eagle-1769.animal.gz",
+      "bytes": 640086,
+      "vertices": 12178,
+      "sha256": "19c538efc8252ad1add18569745f63883f7351e93236ca414fcd0cac01471233"
+    },
+    {
+      "species": "eagle",
+      "seed": 1770,
+      "file": "eagle-1770.animal.gz",
+      "bytes": 639016,
+      "vertices": 12178,
+      "sha256": "3d8a6e9989f323ca4583e26b6332cd9c87b7b28d0dfc53e4ac1b2939e7486203"
+    },
+    {
+      "species": "lion",
+      "seed": 1769,
+      "file": "lion-1769.animal.gz",
+      "bytes": 897415,
+      "vertices": 13015,
+      "sha256": "be48b8258aef3411c7138f6450dbe12688240b730deaf356ee19f3bd6bf56f04"
+    },
+    {
+      "species": "lion",
+      "seed": 1770,
+      "file": "lion-1770.animal.gz",
+      "bytes": 936486,
+      "vertices": 13234,
+      "sha256": "3a8cdcaa1720ec8acd1d335ab74f4373747ff086d437e3f1781a501167039820"
+    },
+    {
+      "species": "cheetah",
+      "seed": 1769,
+      "file": "cheetah-1769.animal.gz",
+      "bytes": 824719,
+      "vertices": 11478,
+      "sha256": "41225e9c6fb9568eaf130105e61caad4004b4340f06296706c34d346bdf48b49"
+    },
+    {
+      "species": "cheetah",
+      "seed": 1770,
+      "file": "cheetah-1770.animal.gz",
+      "bytes": 824642,
+      "vertices": 11478,
+      "sha256": "536382a54adb1bf041f3a36e21ebc9a5cfe7ff784f85d37724093f0c8f4e8ef6"
+    },
+    {
+      "species": "fish",
+      "seed": 1769,
+      "file": "fish-1769.animal.gz",
+      "bytes": 524451,
+      "vertices": 8569,
+      "sha256": "e758f631b8e837554217df778fc71f2db77e05d86ff9486b6c088e5ed1cd0825"
+    },
+    {
+      "species": "fish",
+      "seed": 1770,
+      "file": "fish-1770.animal.gz",
+      "bytes": 547321,
+      "vertices": 8727,
+      "sha256": "27eebb3d83dc344f168db9fae7b86992c9e445c06a3d309675a1ce3174eb3706"
+    },
+    {
+      "species": "shark",
+      "seed": 1769,
+      "file": "shark-1769.animal.gz",
+      "bytes": 854543,
+      "vertices": 12998,
+      "sha256": "848a0be65d8969790503ee7de2220f43c905cb8533033c2d6a7522b2bdf7ae2f"
+    },
+    {
+      "species": "shark",
+      "seed": 1770,
+      "file": "shark-1770.animal.gz",
+      "bytes": 842923,
+      "vertices": 12764,
+      "sha256": "5bc90769b19c69910601a992ae0e7f9a94b0c22ad1a9a49947d4f4bde3d1e83d"
+    }
+  ]
+}

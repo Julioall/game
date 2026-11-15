@@ -1,4 +1,5 @@
 import { BIOMES } from '../world/catalog.js';
+import { floraBiomeAt, FLORA_BIOMES } from '../world/flora-biomes.js';
 
 const rgbOf = color => [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16));
 const colors = BIOMES.map(({ color }) => rgbOf(color));
@@ -15,6 +16,10 @@ export function mapImage(canvas, world, layer) {
     const gz = Math.floor((z + .5) * (stride - 1) / image.height);
     const i = gz * stride + gx, p = (z * image.width + x) * 4;
     let rgb = colors[biome.at(i)];
+    if (layer === 'biome') {
+      const flora = floraBiomeAt(world, gx, gz);
+      if (flora) rgb = rgbOf(FLORA_BIOMES[flora].color);
+    }
     if (layer === 'realm' && territory.at(i)) {
       const faction = realmColors.get(territory.at(i));
       const border = [i + 1, i + stride].some(j => territory.at(j) && territory.at(j) !== territory.at(i));

@@ -54,10 +54,11 @@ export function mouthFlow(world, x, z, mouths, base, mixing, work) {
     }
     const px = x - originX, pz = z - originZ;
     const along = progress + px * directionX + pz * directionZ;
-    if (along <= -3 || along >= mouth.length) continue;
+    const upstreamReach = mouth.kind === 1 ? -40 : -3;
+    if (along <= upstreamReach || along >= mouth.length) continue;
     const across = pz * directionX - px * directionZ;
     const spread = mouth.width + 1.8 + Math.max(0, along) * .38;
-    const weight = smooth(-3, 1, along) * (1 - smooth(0, mouth.length, Math.max(0, along)))
+    const weight = smooth(upstreamReach, mouth.kind === 1 ? -20 : 1, along) * (1 - smooth(0, mouth.length, Math.max(0, along)))
       * (1 - smooth(0, spread, Math.abs(across))) * .94;
     if (weight <= strongest && (!mixing || weight <= mixing.strength)) continue;
     const steps = Math.max(1, Math.ceil(Math.hypot(px, pz)));
@@ -102,7 +103,51 @@ export function deepenMouth(world, mouth) {
     const flow = mouthFlow(world, x, z, [mouth], [0, 0, 0]);
     const influence = Math.hypot(flow[0], flow[1]);
     const edge = smooth(.025, .55, world.wet.at(i));
-    const depth = (1.3 + mouth.width * .24) * influence * edge;
+    const depth = (mouth.kind === 1 ? 4.2 + mouth.width * .16 : 1.3 + mouth.width * .24) * influence * edge;
     world.ground[i] = Math.min(world.ground[i], world.surface[i] - depth);
+  }
+}
+
+
+// Final terrain pass: one continuous bed across the sand and into the ocean.
+export function carveEstuary(world, mouth) {
+  if (mouth.kind !== 1) return;
+  const upstream = 24, length = Math.max(36, mouth.length * 1.5);
+  const radius = mouth.width + 12 + length * .18;
+  const reach = upstream + length + radius;
+  for (let z = Math.max(0, Math.floor(mouth.z - reach)); z <= Math.min(world.stride - 1, Math.ceil(mouth.z + reach)); z++) {
+    for (let x = Math.max(0, Math.floor(mouth.x - reach)); x <= Math.min(world.stride - 1, Math.ceil(mouth.x + reach)); x++) {
+      const px = x - mouth.x, pz = z - mouth.z;
+      const along = px * mouth.dx + pz * mouth.dz;
+      if (along <= -upstream || along >= length) continue;
+      const bend = Math.sin(along * .13 + mouth.x * .07) * .6 + Math.sin(along * .29 + mouth.z * .09) * .25;
+      const across = Math.abs(pz * mouth.dx - px * mouth.dz + bend);
+      // Rounded shoulders begin inland; the offshore fan keeps opening.
+      const shoulder = smooth(-upstream, 12, along);
+      const fan = Math.max(0, along) * .18 * smooth(-12, 24, along);
+      const width = (mouth.width * (.8 + shoulder * 1.15) + 2 + fan)
+        * (1 + Math.sin(along * .11 + mouth.z) * .065
+          + Math.sin(along * .27 + mouth.x) * .025);
+      if (across >= width) continue;
+      const i = z * world.stride + x;
+      if (world.waterKind[i] === 2 || world.ground[i] > mouth.level + 4) continue;
+      const lateral = 1 - smooth(width * .3, width, across);
+      const radial = Math.hypot(Math.max(0, along) / length, across / width);
+      const ramp = smooth(-upstream, -3, along) * (1 - smooth(.3, 1, radial));
+      const bankFade = 1 - smooth(1.5, 4, world.ground[i] - mouth.level);
+      const depth = 3.6 * lateral * ramp * bankFade;
+      if (depth <= .02) continue;
+      // Blend excavation into the existing sand instead of snapping every
+      // affected bank vertex below sea level (which produced square corners).
+      const weight = lateral * ramp * bankFade;
+      const target = Math.min(world.ground[i], mouth.level - 3.6);
+      world.ground[i] += (target - world.ground[i]) * weight;
+      const actualDepth = mouth.level - world.ground[i];
+      if (actualDepth > 0) {
+        world.surface[i] = mouth.level;
+        world.wet[i] = Math.max(world.wet[i], Math.min(1.4, actualDepth * 2));
+        world.waterKind[i] = 1;
+      }
+    }
   }
 }

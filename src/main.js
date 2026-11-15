@@ -3,9 +3,11 @@ import { Vector3 } from 'three';
 import { BIOMES, DEFAULT, HYDROLOGY_VERSIONS, MAX_MAP_SIZE, SETTINGS, SPECIES } from './world/catalog.js';
 import { configuration } from './world/generate.js';
 import { WorldState } from './world/state.js';
+import { floraBiomeAt, FLORA_BIOMES } from './world/flora-biomes.js';
 import { gridSample } from './world/math.js';
 import { TRAVERSAL_TICK } from './world/traversal.js';
 import { WorldView } from './render/view.js';
+import { preloadAnimalFactory } from './render/fauna.js';
 import { loadSave, savedGeneration, storeSave } from './platform/local-save.js';
 import { mapImage, paintMap } from './ui/map.js';
 
@@ -19,6 +21,7 @@ const keys = new Set();
 const intervals = [];
 let view, state, image, places, worker, selected, pointer, toastTimer, lostContext = false;
 let building = false, lastFrame = 0, lastUi = 0, firstDraw = false;
+let faunaStartupDeadline = 0;
 let choosingStart = false, traveler = null, travelTime = 0, ripple = null;
 const initialParams = new URLSearchParams(location.search);
 const requestedHydrology = Number(initialParams.get('hydrology'));
@@ -94,8 +97,9 @@ function inspect(object, point) {
   const title = document.createElement('strong'), description = document.createElement('small');
   panel.append(title, description);
   if (object) {
-    title.textContent = object.kind === 'tree' ? SPECIES[object.species].name : 'Afloramento rochoso';
+    title.textContent = object.kind === 'tree' ? (object.flora?.dead ? 'Árvore seca' : SPECIES[object.flora?.renderSpecies ?? object.species].name) : 'Afloramento rochoso';
     description.textContent = object.kind === 'tree' ? object.age + ' anos · madeira' : 'Recurso natural · pedra';
+    if (object.flora?.biome) description.textContent += ' · ' + FLORA_BIOMES[object.flora.biome].name;
     const button = document.createElement('button');
     button.id = 'harvest';
     button.textContent = object.kind === 'tree' ? 'Cortar e recolher madeira' : 'Coletar pedra';
@@ -110,7 +114,8 @@ function inspect(object, point) {
     }
     const { world } = view;
     const i = Math.round(point.z) * world.stride + Math.round(point.x);
-    title.textContent = BIOMES[world.biome.at(i) ?? 0].name;
+    const flora = floraBiomeAt(world, point.x, point.z);
+    title.textContent = flora ? FLORA_BIOMES[flora].name : BIOMES[world.biome.at(i) ?? 0].name;
     description.textContent = 'Altitude ' + point.y.toFixed(1) + ' m · declive ' + Math.round((world.slope.at(i) ?? 0) * 100) + '%';
   }
 }
@@ -198,6 +203,8 @@ function showRegion() {
 }
 
 function loadWorld(config, preferSaved = true) {
+  // Load the fauna code concurrently with terrain generation, not on first sight.
+  void preloadAnimalFactory().catch(() => {});
   if (preferSaved) config = savedGeneration(config);
   worker?.terminate();
   if(view?.firstPerson)setFirstPerson(false);
@@ -236,7 +243,8 @@ function loadWorld(config, preferSaved = true) {
       current = world.config;
       view?.destroy();
       view = null;
-      view = new WorldView(canvas, presentation);
+      view = new WorldView(canvas, presentation, { baseline: initialParams.get('qa') === '1' && initialParams.get('renderBaseline') === '1' });
+      faunaStartupDeadline = performance.now() + 3000;
       view.showWalkways($('walkways').getAttribute('aria-pressed') === 'true');
       lostContext = false;
       inventory();
@@ -275,6 +283,12 @@ function refresh() {
     ['Grade do mundo', (s.gridBytes / 1048576).toFixed(1) + ' MiB'],
     ['Heap JS aprox.', s.heapBytes === null ? 'indisponível' : (s.heapBytes / 1048576).toFixed(1) + ' MiB'],
     ['Chunks ativos / cache', s.active + ' / ' + s.cached], ['Chamadas GPU', s.calls],
+    ['Resolução interna', s.renderWidth + ' × ' + s.renderHeight],
+    ['Malhas prontas / falhas', s.faunaBakesLoaded + ' / ' + s.faunaBakeFailures],
+    ['Fauna CPU', s.faunaCpuMs.toFixed(2) + ' ms'],
+    ['Render CPU / GPU', s.renderCpuMs.toFixed(2) + ' / ' + (s.gpuMs === null ? 'indisponível' : s.gpuMs.toFixed(2)) + ' ms'],
+    ['Lotes de vegetação', s.vegetationDraws],
+    ['Fauna fora da tela em espera', s.faunaOffscreenSleeping],
     ['Rios / descontinuidades', s.riverEdges + ' / ' + s.brokenRivers],
     ['Lagos / confluências', s.lakes + ' / ' + s.confluences],
     ['Fauna próxima / ativa', s.faunaNearby + ' / ' + s.faunaActive],
@@ -302,14 +316,18 @@ function frame(now) {
       travelFrame((x + y) * Math.SQRT1_2 / scale, (y - x) * Math.SQRT1_2 / scale, dt, now);
     } else if (x || y) view.pan(x * Math.min(dt, 48) * .46, y * Math.min(dt, 48) * .46);
   }
-  if(!dialog.open) state.tickFauna(Math.min(dt/1000,.1),{
+  if(!dialog.open && !(initialParams.get('qa') === '1' && initialParams.get('freezeFauna') === '1')) state.tickFauna(Math.min(dt/1000,.1),{
     x:traveler?.x??view.focus.x,z:traveler?.z??view.focus.z,
     radius:Math.max(110,view.focus.span*Math.hypot(view.aspect,1))
   });
   view.draw(motion.matches ? 0 : now / 1000);
   if (firstDraw) {
-    $('loading').hidden = true;
-    firstDraw = false;
+    if (!view.faunaActors.initialReady() && now < faunaStartupDeadline) {
+      $('loading').querySelector('p').textContent = 'Preparando os animais próximos';
+    } else {
+      $('loading').hidden = true;
+      firstDraw = false;
+    }
   }
   if (dt < 2000 && !document.hidden) {
     intervals.push(dt);

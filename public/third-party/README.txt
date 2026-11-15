@@ -18,3 +18,12 @@ material and gate geometry. The castle uses WebGL meshes and a stone shader.
 
 Three.js, simplex-noise and FlatQueue
 See three.txt (MIT), simplex-noise.txt (MIT) and flatqueue.txt (ISC).
+
+Ultimate Nature Pack by Quaternius
+150 nature models converted from the user-supplied OBJ/MTL pack (94 trees, 21 rocks, 35 other assets).
+CC0 1.0 Universal. See Quaternius-Nature-CC0.txt.
+
+Stylized Nature MegaKit Standard by Quaternius
+19 groundcover models prepared; 12 green plant models used in the current distribution.
+Shared alpha atlas derives from six supplied color textures; foliage recolored green.
+CC0 1.0 Universal. See Quaternius-MegaKit-CC0.txt.

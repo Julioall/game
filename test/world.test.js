@@ -14,7 +14,7 @@ import { stepTraversal, traversalSurface } from '../src/world/traversal.js';
 import { loadSave, savedGeneration } from '../src/platform/local-save.js';
 import { mouthFlow } from '../src/world/terrain/water-flow.js';
 // Keep seed-specific test coordinates stable while the normal map preset is 1,024 m.
-const world = generate({ ...DEFAULT, size: 256 });
+const world = generate({ ...DEFAULT, size: 256, hydrology: 4 });
 const index = indexTowns(world);
 
 test('mouth beds deepen the connection without changing the waterline', () => {
@@ -129,8 +129,8 @@ test('old saves select the original hydrology and retain their terrain', () => {
   const legacyKey = 'kingdom:1:' + JSON.stringify(legacyKeyConfig);
   const entries = new Map([[legacyKey, JSON.stringify(oldSave)]]);
   const storage = { getItem: key => entries.get(key) ?? null };
-  assert.equal(hydrology, 4);
-  assert.equal(savedGeneration(config, { getItem: () => null }).hydrology, 4);
+  assert.equal(hydrology, 8);
+  assert.equal(savedGeneration(config, { getItem: () => null }).hydrology, 8);
   const legacy = savedGeneration(config, storage);
   assert.equal(legacy.hydrology, 1);
   assert.deepEqual(loadSave(legacy, storage), oldSave);
@@ -153,7 +153,7 @@ test('old saves select the original hydrology and retain their terrain', () => {
   entries.set('kingdom:1:' + JSON.stringify({ ...config, hydrology: 3 }), JSON.stringify(oldSave));
   assert.equal(savedGeneration(config, storage).hydrology, 3);
   entries.set('kingdom:1:' + JSON.stringify(config), JSON.stringify({ version: 1 }));
-  assert.equal(savedGeneration(config, storage).hydrology, 4);
+  assert.equal(savedGeneration(config, storage).hydrology, 8);
 });
 
 test('the traveler can enter and leave a lake through the shallows without changing the save', () => {
@@ -227,7 +227,7 @@ test('water queries follow the clipped shore and report depth and downstream dir
   assert.equal(sampleWater(shore, -1, 0), null);
   assert.equal(sampleWater(shore, NaN, 0), null);
 
-  const compact = generate({ ...DEFAULT, size: world.config.size }, { compact: true });
+  const compact = generate(world.config, { compact: true });
   assert.deepEqual(compact.waterKind, world.waterKind);
   const state = new WorldState(compact);
   for (const [code, kind] of [[1, 'sea'], [2, 'lake'], [3, 'river']]) {
@@ -248,7 +248,7 @@ const fingerprint = w => {
 };
 
 test('the same configuration reproduces terrain, climate, rivers, and settlements', () => {
-  assert.equal(fingerprint(world), fingerprint(generate({ ...DEFAULT, size: world.config.size })));
+  assert.equal(fingerprint(world), fingerprint(generate(world.config)));
   assert.notEqual(fingerprint(world), fingerprint(generate({ seed: 42, size: world.config.size })));
   assert.equal(configuration({ size: 4, rivers: 8, seed: -1 }).size, 128);
   assert.equal(configuration({ size: 4, rivers: 8, seed: -1 }).rivers, 1);
@@ -484,7 +484,7 @@ test('extreme configuration disables optional features and supports the stress e
   assert.equal(dry.metrics.lakes, 0);
   assert.equal(dry.metrics.riverEdges, 0);
   assert.ok(chunkObjects(dry, indexTowns(dry), 2, 2).every(o => o.kind === 'rock'));
-  const large = generate({ size: 768, vegetation: 1, rivers: .78, seed: 9057 });
+  const large = generate({ size: 768, vegetation: 1, rivers: .78, seed: 9057, hydrology: 4 });
   assert.equal(large.stride, 769);
   assert.equal(large.metrics.brokenRivers, 0);
   assert.equal(large.metrics.invalidSites, 0);

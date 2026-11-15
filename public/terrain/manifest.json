@@ -1,0 +1,48 @@
+{
+  "tile": 256,
+  "padding": 8,
+  "columns": 4,
+  "rows": 2,
+  "textures": [
+    {
+      "layer": 0,
+      "source": "grass (1).png",
+      "sha256": "f218c20a6f61eafb146a0f614bec45d56a0f7c24930ad02a6a20003a2e73d03d"
+    },
+    {
+      "layer": 1,
+      "source": "grass (4).png",
+      "sha256": "3d44bb75f540ba5df08acf12148de43c41a0402b976da431902b9be0b59a956d"
+    },
+    {
+      "layer": 2,
+      "source": "leaves.png",
+      "sha256": "99c4e4c587281c6ff658c33b89ca10acafe7e8f69d25d3fd1aeea1ed6a8f07fe"
+    },
+    {
+      "layer": 3,
+      "source": "dirt (2).png",
+      "sha256": "d273f8a6172d957526a08000e35db2a876553eae535f405a553800bf62287e0e"
+    },
+    {
+      "layer": 4,
+      "source": "g_pal_00_color.png",
+      "sha256": "c24d7e6cb5389ecad63cf76ab5e49fb15bc505eb42d9db7cc6871969374c19f4"
+    },
+    {
+      "layer": 5,
+      "source": "snow.png",
+      "sha256": "77d3ff2d4d4dc1914cf3823354f502a6b705eb494768c0267a9b6a6eb18d5e56"
+    },
+    {
+      "layer": 6,
+      "source": "grass snow.png",
+      "sha256": "f2de0305569ef37a7a9139afcbe53284a4d9f4a427b376db1dc03badcef77cf0"
+    },
+    {
+      "layer": 7,
+      "source": "road.png",
+      "sha256": "0b33d0e40b8911b979c1fbedc3208ddb375217b2e1743bd10f75d6ed90a43c0c"
+    }
+  ]
+}

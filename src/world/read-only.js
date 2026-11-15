@@ -10,7 +10,7 @@ function freezeRecord(value) {
 
 export const immutableCopy = value => freezeRecord(structuredClone(value));
 
-const gridFields = ['ground', 'wet', 'surface', 'waterKind', 'biome', 'slope', 'distance', 'lake', 'river', 'raw', 'territory'];
+const gridFields = ['ground', 'wet', 'surface', 'waterKind', 'biome', 'slope', 'distance', 'lake', 'river', 'raw', 'territory', 'floraThermal', 'floraRain'];
 
 export function readOnlyWorld(world) {
   const { config, stride, realms, metrics } = world;
@@ -19,7 +19,8 @@ export function readOnlyWorld(world) {
     fort: fort && { bounds: fort.bounds, gate: fort.gate, walkway: fort.walkway },
     cityWall: cityWall && { bounds: cityWall.bounds }
   }));
-  const metadata = immutableCopy({ config, stride, towns, realms, metrics, landmarks: worldLandmarks(world) });
+  const metadata = immutableCopy({ config, stride, towns, realms, metrics, landmarks: worldLandmarks(world),
+    floraClimateStep: world.floraClimateStep, floraClimateStride: world.floraClimateStride });
   const view = { ...metadata };
   for (const name of gridFields) {
     const field = world[name];

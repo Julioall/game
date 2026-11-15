@@ -10,6 +10,8 @@
     "test": "node --test test/*.test.js",
     "playtest": "node tools/playtest.mjs",
     "audit:fauna": "node tools/audit-fauna.mjs",
+    "prepare:fauna": "node tools/prepare-fauna.mjs",
+    "check:fauna-bakes": "node tools/check-fauna-bakes.mjs",
     "benchmark:placement": "node tools/benchmark-placement.mjs",
     "benchmark:water": "node --expose-gc tools/benchmark-water.mjs"
   },

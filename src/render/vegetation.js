@@ -1,11 +1,30 @@
 import * as T from 'three';
 import { SPECIES } from '../world/catalog.js';
-import { random } from '../world/math.js';
+import { hash, random } from '../world/math.js';
 import { stone, part, stick, combine } from './mesh-parts.js';
+import { natureGeometry, natureKey } from './nature-models.js';
 
 const ball = new T.IcosahedronGeometry(1, 1);
 const cone = new T.CylinderGeometry(.06, 1, 1, 8);
 const transform = new T.Object3D();
+const plantTint = new T.Color();
+const shrubTint = new T.Color().setRGB(.9, .82, .72);
+export const grassView = { value: new T.Vector3(0, 0, 20) };
+const bladeTint = new T.Color();
+const distantClassicGrassRate = .5;
+const distantPlantRates = { grass: .6, flower: .45, reed: .68, crop: .78 };
+const distantPlantStreams = { grass: 1, flower: 2, reed: 3, crop: 4 };
+export function treeVisualScale(object) {
+  const variation = hash(0, Math.floor(object.x * 32), Math.floor(object.z * 32), 2101);
+  const maturity = T.MathUtils.smoothstep(object.age ?? 50, 15, 110);
+  return .85 + maturity * .85 + variation * .4 + (variation > .9 ? .4 : 0);
+}
+
+function keepDistantPlant(kind, x, z, classicGrass = false) {
+  const rate = classicGrass ? distantClassicGrassRate : distantPlantRates[kind];
+  if (rate === undefined || rate >= 1) return true;
+  return hash(0, Math.floor(x * 256), Math.floor(z * 256), 1700 + (classicGrass ? 5 : distantPlantStreams[kind])) < rate;
+}
 
 function treeModel(species, variant, style, distant) {
   const { height, radius, colors } = SPECIES[species];
@@ -77,15 +96,18 @@ function smallModel(kind, variant) {
   return combine(parts);
 }
 
-export function modelBank(style) {
+export function modelBank(style, distantLOD = true) {
   const cache = new Map();
   return {
     get(object, distant) {
-      const type = object.kind === 'tree' ? object.species : object.kind;
+      const type = object.kind === 'tree' ? (object.flora?.renderSpecies ?? object.species) : object.kind;
       const variant = distant ? object.variant % 2 : object.variant;
-      const key = type + ':' + variant + ':' + (object.kind === 'tree' && distant);
+      const imported = natureKey(object, style);
+      const simplified = distantLOD && (distant || object.classicGrass === true);
+      const key = imported ? imported + ':' + Boolean(simplified)
+        : type + ':' + variant + ':' + (object.kind === 'tree' && distant);
       if (!cache.has(key)) {
-        const g = object.kind === 'tree'
+        const g = imported ? natureGeometry(object, style, simplified) : object.kind === 'tree'
           ? treeModel(type, variant, style, distant) : smallModel(type, variant);
         cache.set(key, g);
       }
@@ -101,23 +123,98 @@ export function modelBank(style) {
 export function instances(objects, bank, materials, distant) {
   const batches = new Map();
   for (const o of objects) {
-    if (distant && ['grass', 'flower', 'reed', 'crop'].includes(o.kind)) continue;
+    if (distant && !o.grassPlacements && !keepDistantPlant(o.kind, o.x, o.z)) continue;
+    if (distant && o.grassPlacements) {
+      let visible = false;
+      for (let p = 0; p < o.grassPlacements.length; p += 6) {
+        if (keepDistantPlant(o.kind, o.grassPlacements[p], o.grassPlacements[p + 2], true)) {
+          visible = true;
+          break;
+        }
+      }
+      if (!visible) continue;
+    }
     const geometry = bank.get(o, distant);
     if (!batches.has(geometry)) batches.set(geometry, []);
     batches.get(geometry).push(o);
   }
   return [...batches].map(([geometry, entries]) => {
-    const waving = entries[0].kind !== 'rock';
-    const mesh = new T.InstancedMesh(geometry, waving ? materials.wind : materials.solid, entries.length);
-    for (let i = 0; i < entries.length; i++) {
-      const o = entries[i];
-      transform.position.set(o.x, o.y, o.z);
-      transform.rotation.set(0, o.rotation, 0);
-      transform.scale.set(o.scale * (.91 + (o.variant % 3) * .07), o.scale, o.scale);
-      transform.updateMatrix();
-      mesh.setMatrixAt(i, transform.matrix);
+    const waving = !['rock', 'log', 'stump', 'lilypad'].includes(entries[0].kind);
+    const material = geometry.userData.megaPlant ? materials.groundcover : waving ? materials.wind : materials.solid;
+    const count = entries.reduce((n, o) => {
+      if (!o.grassPlacements) return n + 1;
+      if (!distant) return n + o.grassPlacements.length / 6;
+      let retained = 0;
+      for (let p = 0; p < o.grassPlacements.length; p += 6)
+        if (keepDistantPlant(o.kind, o.grassPlacements[p], o.grassPlacements[p + 2], true)) retained++;
+      return n + retained;
+    }, 0);
+    const mesh = new T.InstancedMesh(geometry, material, count);
+    if (['grass', 'flower', 'reed', 'crop'].includes(entries[0].kind)) {
+      const plantMaterial = material.clone();
+      const compile = material.onBeforeCompile;
+      plantMaterial.onBeforeCompile = shader => {
+        compile(shader);
+        shader.uniforms.grassView = grassView;
+        const classic = entries[0].classicGrass === true;
+        const rate = classic ? distantClassicGrassRate : distantPlantRates[entries[0].kind];
+        const stream = 1700 + (classic ? 5 : distantPlantStreams[entries[0].kind]);
+        shader.vertexShader = `uniform vec3 grassView;
+          float grassRank(vec2 p) {
+            uint h = uint(int(floor(p.x * 256.))) * 0x9e3779b1u ^ uint(int(floor(p.y * 256.))) * 0x85ebca77u ^ ${stream}u * 0x27d4eb2du;
+            h = (h ^ (h >> 16u)) * 0x21f0aaadu;
+            h = (h ^ (h >> 15u)) * 0x735a2d97u;
+            return float(h ^ (h >> 15u)) / 4294967296.;
+          }
+        ` + shader.vertexShader.replace('#include <begin_vertex>', `
+          #include <begin_vertex>
+          #ifdef USE_INSTANCING
+            vec2 origin = instanceMatrix[3].xz;
+            float rank = grassRank(origin);
+            float zoomFade = smoothstep(38., 64., grassView.z);
+            float distanceFade = smoothstep(22., 44., distance(origin, grassView.xy));
+            float fade = max(zoomFade, distanceFade);
+            float threshold = (rank - ${rate}) / ${1-rate};
+            float removal = smoothstep(max(0., threshold - .22), max(.001, threshold), fade);
+            transformed *= rank < ${rate} ? 1. : 1. - removal;
+          #endif
+        `);
+      };
+      plantMaterial.customProgramCacheKey = () => material.customProgramCacheKey() + '-grass-gradual-v3-' + entries[0].kind + entries[0].classicGrass;
+      mesh.material = plantMaterial;
+      mesh.addEventListener('dispose', () => plantMaterial.dispose());
+    }
+    let instance = 0;
+    for (const o of entries) {
+      const fit = o.kind === 'tree' && o.flora?.renderSpecies
+        ? Math.min(1, SPECIES[o.species].radius / SPECIES[o.flora.renderSpecies].radius) : 1;
+      plantTint.setRGB(1, 1, 1);
+      if (o.plantWarmth !== undefined) {
+        const heat = T.MathUtils.smoothstep(o.plantWarmth, .62, .88);
+        plantTint.setRGB(1, 1 - heat * .08, 1 - heat * .62);
+        if (o.kind === 'shrub') plantTint.multiply(shrubTint);
+      }
+      const positions = o.grassPlacements;
+      for (let p = 0; p < (positions?.length ?? 6); p += 6) {
+        if (distant && positions && !keepDistantPlant(o.kind, positions[p], positions[p + 2], true)) continue;
+        const scale = positions ? positions[p + 3] : o.scale * (o.kind === 'tree' ? treeVisualScale(o) : 1);
+        const height = positions ? positions[p + 4] : o.heightScale ?? 1;
+        transform.position.set(positions ? positions[p] : o.x, positions ? positions[p + 1] : o.y, positions ? positions[p + 2] : o.z);
+        transform.rotation.set(0, positions ? positions[p + 5] : o.rotation, 0);
+        transform.scale.set(scale * (.91 + (o.variant % 3) * .07) * fit, scale * height, scale * fit);
+        transform.updateMatrix();
+        mesh.setMatrixAt(instance, transform.matrix);
+        if (o.plantWarmth !== undefined) {
+          const tint = bladeTint.copy(plantTint);
+          const variation = hash(0, Math.floor(transform.position.x / 7), Math.floor(transform.position.z / 7), 1820);
+          tint.multiplyScalar(.9 + variation * .12);
+          mesh.setColorAt(instance, tint);
+        }
+        instance++;
+      }
     }
     mesh.userData.sharedGeometry = true;
+    mesh.receiveShadow = true;
     return mesh;
   });
 }

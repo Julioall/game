@@ -30,7 +30,7 @@ O adaptador encaminha movimento com velocidade para `follow`, usa `move({speed:0
 | Eventos (`footstep`, `attackHit`, `actionStart`, etc.) | API preservada no pacote; consumidores de áudio/efeitos e confirmação de combate pendentes. |
 | Attachments (boca, cabeça, sela, etc.) | Disponíveis nos modelos; equipamento e montaria pendentes. |
 | Variação de sexo, idade e aparência | Motor suporta; apresentação reutiliza duas aparências por espécie. Sementes individuais permanecem no domínio. |
-| Bake e atlas | API e ferramenta do motor disponíveis; ZIP não trouxe atlas pronto. Pipeline offline ainda pendente. |
+| Bake e atlas | API e ferramenta do motor disponíveis; ZIP não trouxe atlas pronto. 48 malhas low pré-geradas, duas sementes por espécie, disponíveis em public/fauna; atlas de sprites continua pendente. |
 | Água | Tubarões no mar e peixes em lagoas de nascente, validados no spawn e deslocamento. |
 
 ## Inventário confirmado
@@ -82,3 +82,118 @@ Ações básicas recorrentes: idle, jump, sit, lie, sleep, eat, drink, attack, h
 - Microamostra Node no mapa 1024, semente 1769: 30 ticks com 42 animais locais em aproximadamente 32 ms no total; 1.830 candidatos de fauna e 31.881 candidatos de obstáculos, com 20.475 testes geométricos. É uma amostra local, não meta garantida.
 - O primeiro carregamento dos modelos ainda pode causar picos e queda de FPS; a criação tem no máximo dois trabalhos pendentes, sem limitar o total de animais visíveis. Antes da consulta por células de 8 m, o playtest observou cerca de 23 FPS na vista ampla durante construção. Na rodada final, mediu aproximadamente 141 FPS na vila, 83 FPS na vista ampla e 133 FPS durante navegação; falta medir hardware integrado e modelos pré-construídos.
 - Praia é apresentação (areia/vegetação visível), sem modificação de relevo ou recursos autoritativos. O modo de câmera em primeira pessoa ainda não tem colisão física com construções.
+
+
+## Revisão de carregamento e estabilidade visual
+
+A criação de modelos só dentro do enquadramento, a fila vinculada à consulta
+espacial de 450 ms e o descarte no mesmo limite causavam atrasos e recriações
+junto às bordas. O carregamento assíncrono também podia terminar com uma posição
+antiga, especialmente quando o animal já estava parado no estado autoritativo.
+
+Implementação atual:
+
+- `src/render/fauna.js` antecipa a importação da biblioteca durante a geração do
+  terreno. A fila inicia no máximo um trabalho por quadro, reutiliza vagas sem
+  esperar a próxima consulta e conserva o limite de dois trabalhos pendentes.
+- A seleção usa uma margem projetada de 1,4 para preparar modelos e 1,8 para
+  conservar os existentes. A consulta radial tem folga de pelo menos 12 m ou
+  25% do raio, com descarte fora da região. A prioridade é a fauna enquadrada.
+- Ao terminar o carregamento, o modelo recebe a posição atual do estado. Idle
+  continua nativo e também acompanha a posição autoritativa, sem follow com
+  velocidade zero. A simulação não depende do carregamento visual.
+- `src/render/fauna-appearance.js` faz uma entrada por descarte ordenado de
+  fragmentos durante 0,3 s, preservando teste de profundidade e os materiais do
+  motor. O relógio dessa transição independe do dt da animação, inclusive com
+  movimento reduzido. Não são criados materiais transparentes adicionais.
+- A tela inicial espera os modelos enquadrados, com prazo máximo de três
+  segundos após criar a visualização. Falhas não bloqueiam a abertura do mapa.
+
+### Malhas preparadas antes da execução
+
+`npm run prepare:fauna` gera 48 arquivos compactados e um manifesto em
+`public/fauna/`, usando exatamente low e sementes 1769/1770, já empregadas pelo
+renderer. O conjunto ocupa aproximadamente 37,3 MiB. São recursos distribuídos
+com o jogo, e não um cache temporário. Não entram no bundle JavaScript inicial.
+
+`src/render/fauna-assets.js` baixa e descompacta apenas as aparências necessárias,
+reutilizando a mesma promessa e buffer por aparência durante a sessão. Aceita
+servidores que já descompactam Content-Encoding e servidores que entregam gzip
+bruto. O cabeçalho PANM é conferido antes de usar o bake. Se faltar o arquivo ou
+houver falha de leitura, a criação procedural continua como fallback. O cache de
+buffers tem no máximo as 48 aparências deste perfil e pode elevar a memória
+retida entre regenerações de mundo; ainda falta medir em dispositivos móveis.
+
+`src/render/fauna-species.js` usa as 24 entradas públicas species da dependência,
+evita depender de chunks internos antigos do otimizador de desenvolvimento e
+reutiliza a promessa por espécie. O motor continua com sua revisão fixada e os
+mesmos rigs, ações, qualidade e sementes. Não há nova dependência nem mudança
+em IDs, comportamento, população ou save.
+
+### Verificações desta revisão
+
+- `npm test`: 39 testes passaram. Incluem limite de concorrência, avanço da fila
+  entre consultas, preparação fora da tela, retenção nas bordas, descarte de
+  trabalhos cancelados, sincronização após carregamento, chegada com dt zero,
+  cache de download, gzip bruto/já decodificado e fallback.
+- `npm run build`: passou; o aviso de tamanho do bundle inicial permanece.
+- `npm run audit:fauna`: 24 espécies, zero falhas e nenhuma ausente.
+- `npm run check:fauna-bakes`: verifica os 48 arquivos, hashes, sementes,
+  geometria, movimento e descarte sem WebGL.
+- Navegador em 5917, semente 1769: abertura inicial, cinco passos de afastamento
+  e alternância de aproximação/afastamento conferidos com capturas. Na vista
+  ampla foram carregadas 31 aparências pré-geradas sem falhas de arquivo ou de
+  modelo após corrigir o carregamento das espécies. A configuração temporária
+  de cache usada no diagnóstico foi restaurada.
+
+Não foi feita comparação estatística antes/depois. Primeiro download, criação
+dos objetos de render e compilação de shaders ainda têm custo. Teletransportes
+para regiões não visitadas podem exigir novos downloads; a antecipação e a
+entrada curta reduzem o aparecimento abrupto, sem garantir ausência de atraso
+em rede lenta. Atlas e instanciamento de animais continuam fora deste recorte.
+
+## Otimização de CPU no zoom amplo
+
+O perfil de CPU no navegador apontou atualização/pose de animais, matrizes e
+solução de pernas entre os maiores consumidores. O renderer do pacote desativa
+frustumCulled em partes dos animais; conservar modelos de antecipação dentro da
+cena mantinha travessia de ossos e submissões mesmo quando estavam fora da tela.
+
+O adaptador agora conserva o modelo carregado, mas o retira da cena sem descarte
+fora de uma margem projetada de 1,15, recolocando-o a partir de 1,08. Isso evita
+trabalho na árvore de render e recriação dos modelos. Ao retornar, a pose recebe
+imediatamente o estado atual. O índice e a simulação autoritativa não mudam.
+
+A apresentação acumula dt e atualiza a animação no máximo a 30 Hz com span de
+66 m ou mais, e no máximo a 60 Hz de perto/primeira pessoa. O render continua
+livre para apresentar mais quadros. A acumulação conserva o tempo de animação;
+ela não altera os ticks de simulação, IDs, saves, resolução ou geometrias. A
+cadência pode ficar um pouco abaixo do teto conforme a duração dos quadros.
+
+O diagnóstico informa a média móvel de CPU do adaptador de fauna e quantos
+modelos fora da tela estão em espera. Essa medição exclui tempo assíncrono de
+download, criação de modelos e custo de GPU; não representa o custo total da fauna.
+
+Verificação: 41 testes aprovados, incluindo retirada da cena sem descarte,
+retorno com posição atual, limite de cadência e conservação de dt. Build e
+inspeção visual do zoom amplo passaram, sem erros no console. A amostra final
+na vila da semente 1769, janela 871 × 711, resolução interna 1307 × 1067,
+registrou 117 FPS, p95 de 14 ms, 550 chamadas, 52 modelos carregados e 18 em
+espera fora da cena, com média de CPU do adaptador de 1,34 ms. O carregamento
+já estava sem trabalhos pendentes. Não é garantia de 144 FPS.
+
+Antes da alteração, a vista aberta pelo usuário apresentou 62 FPS e p95 de
+21,1 ms, mas com outro foco (61 chunks e 66 modelos); portanto esses números
+não constituem comparação controlada. Não há benchmark repetido no mesmo
+foco e população nem medição em dispositivo móvel nesta rodada. Alterações
+contemporâneas da água também impedem atribuir todo ganho exclusivamente à fauna.
+
+## Distribuição de animação e partes distantes
+
+A revisão atual usa fases com hash do ID para distribuir trabalho entre quadros,
+60 Hz de perto, 30 Hz no mapa amplo e 20 Hz apenas para espécies pequenas
+afastadas do foco com span a partir de 90 m. As camadas de cobertura do pacote
+são desligadas abaixo de 16 pixels CSS estimados no mapa amplo e retornam
+de perto. Corpos, olhos, rigs e estado autoritativo permanecem. A acumulação
+conserva tempo de animação. A [comparação de render](otimizacao-render.md) registra
+condições, números e os 47 testes desta revisão.

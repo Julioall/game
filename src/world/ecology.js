@@ -1,7 +1,8 @@
 import { createNoise2D } from 'simplex-noise';
 import { BIOMES } from './catalog.js';
-import { random, smooth } from './math.js';
+import { clamp, random, smooth } from './math.js';
 import { DX, DZ } from './terrain/drainage.js';
+import { createFloraClimate } from './flora-climate.js';
 
 export function ecology(config, stride, fields, rain, heat, slope = new Float32Array(fields.wet.length),
   queue = new Int32Array(fields.wet.length)) {
@@ -26,12 +27,25 @@ export function ecology(config, stride, fields, rain, heat, slope = new Float32A
 
   const counts = new Uint32Array(BIOMES.length);
   const noise = createNoise2D(random(config.seed ^ 0x59332));
+  const regional = config.hydrology >= 8;
+  const regionScale = clamp(config.size * .18, 90, 420);
   for (let i = 0; i < ground.length; i++) {
     const x = i % stride, z = Math.floor(i / stride);
     const dx = (ground[i + (x < stride - 1 ? 1 : 0)] - ground[i - (x > 0 ? 1 : 0)]) / 2;
     const dz = (ground[i + (z < stride - 1 ? stride : 0)] - ground[i - (z > 0 ? stride : 0)]) / 2;
     const incline = slope[i] = Math.hypot(dx, dz);
-    const moisture = rain[i] + .2 * (1 - smooth(1, 17, distance[i])) + noise(x / 14, z / 14) * .14;
+    let variation;
+    if (regional) {
+      // Broad, warped climate masses dominate; subordinate scales add coves
+      // and occasional small clearings rather than equal-sized polka dots.
+      const wx = x + noise(x / regionScale + 31, z / regionScale) * regionScale * .22;
+      const wz = z + noise(x / regionScale, z / regionScale - 31) * regionScale * .22;
+      const broad = noise(wx / regionScale, wz / regionScale);
+      const local = noise(wx / (regionScale * .29) + 17, wz / (regionScale * .29));
+      const detail = noise(x / 19, z / 19);
+      variation = broad * .115 + local * .028 + detail * .006;
+    } else variation = noise(x / 14, z / 14) * .14;
+    const moisture = rain[i] + .2 * (1 - smooth(1, 17, distance[i])) + variation;
     const elevation = ground[i] / (.63 + .68 * config.relief);
     let b = 2;
     if (wet[i] > 0) b = 0;
@@ -48,5 +62,5 @@ export function ecology(config, stride, fields, rain, heat, slope = new Float32A
     biome[i] = b;
     counts[b]++;
   }
-  return { distance, slope, biome, counts };
+  return { distance, slope, biome, counts, ...createFloraClimate(config, stride, ground, rain, heat) };
 }

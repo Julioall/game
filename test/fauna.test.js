@@ -217,3 +217,137 @@ test('presentation forwards supported actions once and preserves native idle ins
   assert.equal(stops, 1);
   view.dispose();
 });
+
+
+function actorFixture({ records, createAnimal, readState, visible } = {}) {
+  class Vector3 {
+    constructor(x = 0, y = 0, z = 0) { Object.assign(this, { x, y, z }); }
+    copy(p) { Object.assign(this, { x: p.x, y: p.y, z: p.z }); return this; }
+  }
+  const index = new FaunaSpatialIndex();
+  index.set('0,0', records);
+  const scene = new Set();
+  const makeAnimal = () => ({
+    object: {}, position: new Vector3(), move() {}, follow() {}, update() {}, dispose() {}
+  });
+  const view = new FaunaActors({ THREE: { Vector3 }, index, world: meadow(),
+    scene: { add: o => scene.add(o), remove: o => scene.delete(o) },
+    createAnimal: createAnimal ?? (async () => makeAnimal()), readState, visible });
+  return { view, scene, makeAnimal };
+}
+const flushActors = () => new Promise(resolve => setImmediate(resolve));
+
+test('animal construction fills free slots between spatial plans and stays bounded', async () => {
+  const records = Array.from({ length: 4 }, (_, i) =>
+    ({ id: 'queue:' + i, species: 'deer', seed: i, x: 10 + i, y: 3, z: 10, heading: 0 }));
+  const completions = [];
+  const { view, makeAnimal } = actorFixture({ records,
+    createAnimal: () => new Promise(resolve => completions.push(resolve)) });
+  view.update({ x: 10, z: 10 }, .016, 1);
+  await flushActors();
+  assert.equal(view.initialReady(), false);
+  view.update({ x: 10, z: 10 }, .016, 1.016);
+  await flushActors();
+  view.update({ x: 10, z: 10 }, .016, 1.032);
+  assert.equal(completions.length, 2);
+  assert.equal(view.pending.size, 2);
+  completions[0](makeAnimal());
+  await flushActors();
+  view.update({ x: 10, z: 10 }, .016, 1.048);
+  await flushActors();
+  assert.equal(completions.length, 3, 'does not wait 450 ms to reuse a free slot');
+  assert.equal(view.pending.size, 2);
+  view.dispose();
+  completions[1](makeAnimal());
+  completions[2](makeAnimal());
+  await flushActors();
+  assert.equal(view.actors.size, 0);
+  assert.equal(view.pending.size, 0);
+});
+
+test('animals preload outside the screen and survive small camera boundary changes', async () => {
+  let screenX = 1.2, builds = 0;
+  const record = { id: 'edge', species: 'deer', seed: 1, x: 10, y: 3, z: 10, heading: 0 };
+  const { view, makeAnimal } = actorFixture({ records: [record],
+    visible: (_, margin = 1.05) => screenX <= margin,
+    createAnimal: async () => { builds++; return makeAnimal(); } });
+  view.update({ x: 10, z: 10 }, .016, 1);
+  await flushActors();
+  assert.equal(view.actors.size, 1, 'prepared before entering the viewport');
+  screenX = 1.5;
+  view.update({ x: 10, z: 10 }, .016, 1.6);
+  assert.equal(view.actors.size, 1, 'retention margin avoids disposal at the load boundary');
+  screenX = 1.1;
+  view.update({ x: 10, z: 10 }, .016, 2.2);
+  assert.equal(builds, 1);
+  screenX = 2;
+  view.update({ x: 10, z: 10 }, .016, 2.8);
+  assert.equal(view.actors.size, 0);
+  view.dispose();
+});
+
+test('late animal builds start at authoritative position and idle stays synchronized', async () => {
+  const record = { id: 'late', species: 'deer', seed: 1, x: 10, y: 3, z: 10, heading: 0 };
+  let current = { ...record }, finish;
+  const { view, scene, makeAnimal } = actorFixture({ records: [record], readState: () => current,
+    createAnimal: () => new Promise(resolve => { finish = resolve; }) });
+  view.update({ x: 10, z: 10 }, .016, 1);
+  await flushActors();
+  current = { ...record, x: 18, velocity: { x: 0, y: 0, z: 0 } };
+  const animal = makeAnimal();
+  finish(animal);
+  await flushActors();
+  assert.equal(animal.position.x, 18);
+  assert.equal(scene.size, 1);
+  assert.equal(view.initialReady(), true);
+  current = { ...current, x: 19 };
+  view.update({ x: 10, z: 10 }, .016, 1.016);
+  assert.equal(animal.position.x, 19);
+  view.update({ x: 10, z: 10 }, 0, 1.4);
+  assert.equal(view.actors.get(record.id).arrival.value, 1, 'arrival completes even when animation dt is zero');
+  view.dispose();
+});
+
+
+test('prefetched offscreen animals detach without disposal and resume at current state', async () => {
+  let screenX = 0, updates = 0, disposed = 0;
+  const record = { id: 'sleeping', species: 'deer', seed: 1, x: 10, y: 3, z: 10, heading: 0 };
+  let state = record;
+  const { view, scene, makeAnimal } = actorFixture({ records: [record], readState: () => state,
+    visible: (_, margin = 1.05) => screenX <= margin,
+    createAnimal: async () => ({ ...makeAnimal(), update() { updates++; }, dispose() { disposed++; } }) });
+  view.update({ x: 10, z: 10 }, .016, 1);
+  await flushActors();
+  view.update({ x: 10, z: 10 }, .016, 1.016);
+  const before = updates;
+  screenX = 1.3;
+  view.update({ x: 10, z: 10 }, .016, 1.032);
+  assert.equal(scene.size, 0);
+  assert.equal(updates, before);
+  assert.equal(disposed, 0);
+  assert.equal(view.actors.size, 1);
+  state = { ...record, x: 18 };
+  screenX = 0;
+  view.animationInterval = 1 / 30;
+  view.update({ x: 10, z: 10 }, .001, 1.033);
+  assert.equal(scene.size, 1);
+  assert.equal(view.actors.get(record.id).animal.position.x, 18);
+  assert.equal(updates, before + 1);
+  view.dispose();
+});
+
+test('distant animation does less work while conserving elapsed animation time', async () => {
+  const record = { id: 'cadence', species: 'deer', seed: 1, x: 10, y: 3, z: 10, heading: 0 };
+  let updates = 0, elapsed = 0;
+  const { view, makeAnimal } = actorFixture({ records: [record],
+    createAnimal: async () => ({ ...makeAnimal(), update(dt) { updates++; elapsed += dt; } }) });
+  view.update({ x: 10, z: 10 }, 0, 1);
+  await flushActors();
+  updates = 0;
+  view.animationInterval = 1 / 30;
+  for (let i = 1; i <= 120; i++) view.update({ x: 10, z: 10 }, 1 / 120, 1 + i / 120);
+  assert.equal(updates, 30);
+  assert.ok(Math.abs(elapsed + view.actors.get(record.id).animationTime - 1) < 1e-8);
+  assert.equal(view.actors.size, 1);
+  view.dispose();
+});

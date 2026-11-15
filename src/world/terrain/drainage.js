@@ -5,11 +5,13 @@
  * surfaces for lakes, grid-index parents, and distance-weighted grade.
  */
 import FlatQueue from 'flatqueue';
+import { createNoise2D } from 'simplex-noise';
+import { random } from '../math.js';
 
 export const DX = [1, 0, -1, 0, 1, -1, -1, 1];
 export const DZ = [0, 1, 0, -1, 1, 1, -1, -1];
 
-export function drain(height, rain, stride, sea) {
+export function drain(height, rain, stride, sea, seed) {
   const queue = new FlatQueue();
   const downstream = new Int32Array(height.length).fill(-2);
   const order = new Int32Array(height.length);
@@ -17,11 +19,21 @@ export function drain(height, rain, stride, sea) {
   const flux = new Float32Array(height.length);
   const slope = new Float32Array(height.length);
   let written = 0;
+  // A small, spatially coherent travel cost breaks the straight queue-order
+  // channels on flood-filled flats. It affects routing, never lake elevations.
+  const noise = seed === undefined ? null : createNoise2D(random(seed ^ 0x72697665));
+  const routing = noise ? new Float64Array(height.length) : null;
 
   function visit(i, parent, level) {
     downstream[i] = parent;
     filled[i] = level;
-    queue.push(i, filled[i]);
+    if (routing) {
+      const x = i % stride, z = Math.floor(i / stride);
+      const distance = parent < 0 ? 0 : Math.hypot(x - parent % stride, z - Math.floor(parent / stride));
+      const cost = .004 * distance * (1.5 + noise(x / 29, z / 29));
+      routing[i] = parent < 0 ? level : Math.max(height[i], routing[parent]) + cost;
+    }
+    queue.push(i, routing ? routing[i] : filled[i]);
   }
 
   for (let z = 0; z < stride; z++) for (let x = 0; x < stride; x++) {

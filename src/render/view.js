@@ -1,18 +1,24 @@
-import { seaBeachDistance } from './coast.js';
+import { seaBeachDistance, seaShoreDistance } from './coast.js';
 import { PixelArtPass } from './pixel-art.js';
+import { renderResolution } from './resolution.js';
 import * as T from 'three';
 import { CHUNK, SPECIES } from '../world/catalog.js';
 import { crownOverlaps } from '../world/audit.js';
 import { chunkKey } from '../world/chunks.js';
 import { chunkObjects } from '../world/vegetation.js';
 import { clamp, gridSample } from '../world/math.js';
-import { beachMaterial, buildingMaterial, makeClock, objectMaterial, shadowMaterial, terrainMaterial, waterMaterial } from './materials.js';
+import { buildingMaterial, groundcoverMaterial, makeClock, objectMaterial, shadowMaterial, terrainMaterial } from './materials.js';
 import { groundShadows, surfaceMeshes } from './terrain.js';
-import { instances, modelBank } from './vegetation.js';
+import { instances, modelBank, grassView, treeVisualScale } from './vegetation.js';
+import { VegetationBatches } from './vegetation-batches.js';
 import { structuresMesh } from './structures.js';
 import { travelerModel } from './traveler.js';
 import { FaunaActors } from './fauna.js';
-import { oceanGeometry } from './water.js';
+import { faunaProfile } from './fauna-budget.js';
+import { GpuTimer, GpuDensityBudget } from './gpu-timer.js';
+import { waterMaterial } from './water.js';
+import { outerOceanGeometry } from './water-geometry.js';
+import { WaterReflections } from './water-reflections.js';
 
 const viewing = new T.Vector3(1, 1.16, 1);
 const groundPitch = viewing.y / viewing.length();
@@ -25,10 +31,11 @@ function dispose(mesh) {
 }
 
 export class WorldView {
-  constructor(canvas, projection) {
+  constructor(canvas, projection, { baseline = false } = {}) {
+    this.performanceBaseline = baseline;
     const { world } = projection;
     this.canvas = canvas;
-    this.world = { ...world, beachDistance: seaBeachDistance(world) };
+    this.world = { ...world, beachDistance: seaBeachDistance(world), coastDistance: seaShoreDistance(world) };
     this.projection = projection;
     this.index = projection.index;
     this.scene = new T.Scene();
@@ -39,6 +46,8 @@ export class WorldView {
     sun.position.set(-45, 70, -24);
     this.scene.add(sun);
     this.renderer = new T.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+    this.gpuTimer = new GpuTimer(this.renderer.getContext());
+    this.gpuBudget = new GpuDensityBudget();
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
@@ -60,24 +69,30 @@ export class WorldView {
     this.focus = { ...this.home };
     this.clock = makeClock();
     this.materials = {
-      terrain: terrainMaterial(), water: waterMaterial(this.clock), beach: beachMaterial(this.clock), shadow: shadowMaterial(),
+      terrain: terrainMaterial(), shadow: shadowMaterial(), water: waterMaterial(this.clock),
       wind: objectMaterial(this.clock, true), solid: objectMaterial(this.clock),
+      groundcover: groundcoverMaterial(this.clock),
       houses: buildingMaterial()
     };
-    this.bank = modelBank(world.config.style);
-    this.ocean = new T.Mesh(oceanGeometry(world.config.size), this.materials.water);
-    this.scene.add(this.ocean);
+    this.outerOcean = new T.Mesh(outerOceanGeometry(world.config.size), this.materials.water);
+    this.scene.add(this.outerOcean);
+    this.waterReflections = new WaterReflections(this.materials.water);
+    this.bank = modelBank(world.config.style, !baseline);
+    this.vegetation = new VegetationBatches(this.scene, this.bank, this.materials);
     this.traveler = travelerModel();
     this.scene.add(this.traveler);
     this.walkwayOverlay = null;
     this.chunks = new Map();
     this.faunaIndex = projection.fauna;
     this.faunaActors = new FaunaActors({ THREE: T, scene: this.scene, index: this.faunaIndex, world,
-      visible: record => {
+      visible: (record, margin = 1.05) => {
         const p = new T.Vector3(record.x,record.y+.6,record.z).project(this.camera);
-        return p.z>=-1 && p.z<=1 && Math.abs(p.x)<=1.05 && Math.abs(p.y)<=1.05;
+        return p.z>=-1 && p.z<=1 && Math.abs(p.x)<=margin && Math.abs(p.y)<=margin;
       },
-      readState: id => projection.fauna.read(id) });
+      readState: id => projection.fauna.read(id),
+      stagger: !baseline,
+      presentationProfile: baseline ? null
+        : record => faunaProfile(record, this.focus, this.canvas.clientHeight, Boolean(this.firstPerson)) });
     this.bridges = new Map();
     for (const { bridge, x, z } of world.towns) {
       if (!bridge) continue;
@@ -96,11 +111,20 @@ export class WorldView {
 
   resize() {
     const width = this.canvas.clientWidth || innerWidth, height = this.canvas.clientHeight || innerHeight;
-    const scale = { crisp: 2, balanced: 3, atlas: 4 }[this.world.config.detail];
-    this.renderer.setSize(Math.max(1, Math.round(width / scale)), Math.max(1, Math.round(height / scale)), false);
-    this.pixelArt.resize(this.renderer.domElement.width,this.renderer.domElement.height);
     this.aspect = width / height;
+    this.updateResolution();
     this.stale = true;
+  }
+
+  updateResolution() {
+    const width = this.canvas.clientWidth || innerWidth, height = this.canvas.clientHeight || innerHeight;
+    const target = renderResolution(this.world.config.detail, this.focus.span, width, height, Boolean(this.firstPerson), this.gpuBudget.cap);
+    if (this.renderWidth === target.width && this.renderHeight === target.height) return;
+    this.renderer.setSize(target.width, target.height, false);
+    this.pixelArt.resize(target.width, target.height);
+    this.renderWidth = target.width;
+    this.renderHeight = target.height;
+    this.pixelScale = target.scale;
   }
 
   showTraveler(actor) {
@@ -174,6 +198,7 @@ export class WorldView {
   }
 
   updateCamera() {
+    this.updateResolution();
     const { x, z, span } = this.focus;
     const y = gridSample(this.world.ground, this.world.stride, x, z) + 1.4;
     const sx = Math.round(x / 16) * 16, sz = Math.round(z / 16) * 16;
@@ -208,8 +233,8 @@ export class WorldView {
     for (let cz = first(z); cz <= last(z); cz++) for (let cx = first(x); cx <= last(x); cx++) {
       center.set((cx + .5) * CHUNK, 10, (cz + .5) * CHUNK);
       const box = new T.Box3(
-        new T.Vector3(center.x - 20, -15, center.z - 20),
-        new T.Vector3(center.x + 20, 52, center.z + 20)
+        new T.Vector3(center.x - 52, -15, center.z - 52),
+        new T.Vector3(center.x + 52, 52, center.z + 52)
       );
       if (!frustum.intersectsBox(box)) continue;
       const distance = Math.hypot(center.x - x, center.z - z);
@@ -218,11 +243,12 @@ export class WorldView {
       const limit = existing?.distant ? 45 : 58;
       candidates.push({ cx, cz, key, distance, distant: span > 66 || distance > limit });
     }
-    this.near = candidates.sort((a, b) => a.distance - b.distance).slice(0, 66);
+    this.near = candidates.sort((a, b) => a.distance - b.distance).slice(0, 100);
     const visible = new Set(this.near.map(c => c.key));
     for (const [key, chunk] of this.chunks) {
       if (chunk.group.visible !== visible.has(key)) this.renderer.shadowMap.needsUpdate = true;
       chunk.group.visible = visible.has(key);
+      this.vegetation.setVisible(key, chunk.group.visible);
       if (chunk.group.visible) chunk.touched = this.frame;
     }
     this.stale = false;
@@ -235,7 +261,8 @@ export class WorldView {
     }
     const natural = chunk.objects.filter(o => !this.projection.isRemoved(o.id));
     const buildings = [...(this.index.buildings.get(entry.key) ?? []), ...this.projection.buildingsAt(entry.key)];
-    const objects = instances(natural, this.bank, this.materials, entry.distant);
+    const objects = this.performanceBaseline ? instances(natural, this.bank, this.materials, entry.distant) : [];
+    if (!this.performanceBaseline) this.vegetation.setChunk(entry.key, natural, entry.distant, chunk.group.visible);
     const forts = this.index.defenses.get(entry.key) ?? [];
     const structures = structuresMesh(buildings, this.bridges.get(entry.key) ?? [], forts, this.world, this.materials.houses);
     if (structures) {
@@ -253,22 +280,30 @@ export class WorldView {
 
   stream() {
     const started = performance.now();
+    // Prepare lightweight ground before the expensive plant generation. The
+    // expanded camera bounds warm one extra row before it enters the viewport.
+    let surfacesCreated = 0;
+    for (const entry of this.near) {
+      if (this.chunks.has(entry.key)) continue;
+      if (surfacesCreated && (surfacesCreated >= 8 || performance.now() - started > 5)) break;
+      const group = new T.Group();
+      const surfaces = surfaceMeshes(this.world, this.index, entry.cx, entry.cz, this.materials);
+      group.add(...surfaces);
+      this.chunks.set(entry.key, { key: entry.key, group, surfaces, touched: this.frame, dirty: true });
+      this.scene.add(group);
+      surfacesCreated++;
+    }
     let count = 0;
     for (const entry of this.near) {
       let chunk = this.chunks.get(entry.key);
       if (chunk && !chunk.dirty && chunk.distant === entry.distant) continue;
-      if (count > 0 && (count >= 2 || performance.now() - started > 5)) break;
-      if (!chunk) {
-        const group = new T.Group();
-        const surfaces = surfaceMeshes(this.world, this.index, entry.cx, entry.cz, this.materials);
-        group.add(...surfaces);
-        chunk = { key: entry.key, group, surfaces, touched: this.frame,
-          objects: chunkObjects(this.world, this.index, entry.cx, entry.cz).filter(o => {
+      if (count > 0 && (count >= 6 || performance.now() - started > 7)) break;
+      if (!chunk) continue;
+      if (!chunk.objects) {
+        chunk.objects = chunkObjects(this.world, this.index, entry.cx, entry.cz).filter(o => {
             const i=Math.round(o.z)*this.world.stride+Math.round(o.x);
             return o.kind==='rock' || this.world.beachDistance.at(i)>10 || o.y>3.5;
-          }) };
-        this.chunks.set(entry.key, chunk);
-        this.scene.add(group);
+          });
       }
       this.decorate(chunk, entry);
       count++;
@@ -277,10 +312,10 @@ export class WorldView {
       this.lastChunkMs = performance.now() - started;
       this.maxChunkMs = Math.max(this.maxChunkMs, this.lastChunkMs);
     }
-    if (this.chunks.size <= 80) return;
+    if (this.chunks.size <= 144) return;
     const inactive = [...this.chunks].filter(([, c]) => !c.group.visible).sort((a, b) => a[1].touched - b[1].touched);
     for (const [key, chunk] of inactive) {
-      if (this.chunks.size <= 80) break;
+      if (this.chunks.size <= 144) break;
       this.release(chunk);
       this.chunks.delete(key);
     }
@@ -325,16 +360,34 @@ export class WorldView {
   }
 
   draw(seconds) {
+    const cpuStarted = performance.now();
     if (this.stale) this.updateCamera();
     this.frame++;
+    grassView.value.set(this.focus.x, this.focus.z, this.firstPerson ? 20 : this.focus.span);
     this.stream();
+    this.vegetation.flush();
     const dt = this.previousDraw === undefined ? 0 : seconds - this.previousDraw;
     this.previousDraw = seconds;
     this.faunaActors.radius = Math.max(44, this.focus.span * Math.hypot(this.aspect, 1));
+    this.faunaActors.animationInterval = this.firstPerson || this.focus.span < 66 ? 1 / 60 : 1 / 30;
+    const faunaStarted = performance.now();
     this.faunaActors.update(this.focus, dt, performance.now() / 1000);
+    const faunaMs = performance.now() - faunaStarted;
+    this.faunaCpuMs = this.faunaCpuMs === undefined ? faunaMs : this.faunaCpuMs * .9 + faunaMs * .1;
     this.clock.value = seconds;
     this.renderer.info.reset();
+    this.gpuTimer.begin();
+    this.waterReflections.update(this.renderer, this.scene, this.camera, this.world, this.focus, performance.now());
     this.pixelArt.render(this.renderer, this.scene, this.camera);
+    this.gpuTimer.end();
+    const cpuMs = performance.now() - cpuStarted;
+    this.renderCpuMs = this.renderCpuMs === undefined ? cpuMs : this.renderCpuMs * .9 + cpuMs * .1;
+    const stable = !this.firstPerson && this.focus.span >= 66 && !this.vegetation.dirty.size
+      && !this.faunaActors.pending.size && this.near.every(entry => {
+        const chunk = this.chunks.get(entry.key);
+        return chunk && !chunk.dirty && chunk.distant === entry.distant;
+      });
+    if (!this.performanceBaseline && this.gpuBudget.observe(this.gpuTimer.average(), this.renderCpuMs, this.gpuTimer.serial, stable)) this.updateResolution();
   }
 
   pick(clientX, clientY, objects = true) {
@@ -344,10 +397,11 @@ export class WorldView {
     const active = [...this.chunks.values()].filter(c => c.group.visible);
     const terrain = this.ray.intersectObjects(active.flatMap(c => c.surfaces), false)[0];
     let bestDistance = terrain?.distance ?? Infinity, hit = null;
-    if (objects) for (const chunk of active) for (const o of chunk.objects) {
+    if (objects) for (const chunk of active) for (const o of chunk.objects ?? []) {
       if (!['tree', 'rock'].includes(o.kind) || this.projection.isRemoved(o.id)) continue;
-      const y = o.kind === 'tree' ? SPECIES[o.species].height * o.scale * .70 : o.scale * .42;
-      const radius = o.kind === 'tree' ? Math.max(.55, o.radius * .85) : o.scale * .62;
+        const visualScale = o.kind === 'tree' ? treeVisualScale(o) : 1;
+        const y = o.kind === 'tree' ? SPECIES[o.flora?.renderSpecies ?? o.species].height * o.scale * visualScale * .70 : o.scale * .42;
+      const radius = o.kind === 'tree' ? Math.max(.55, o.radius * visualScale * .85) : o.scale * .62;
       point.set(o.x, o.y + y, o.z);
       if (this.ray.ray.distanceSqToPoint(point) > radius * radius) continue;
       const distance = this.ray.ray.origin.distanceTo(point) - radius;
@@ -357,6 +411,7 @@ export class WorldView {
   }
 
   release(chunk) {
+    this.vegetation.removeChunk(chunk.key);
     this.scene.remove(chunk.group);
 
     for (const mesh of chunk.group.children) dispose(mesh);
@@ -368,15 +423,20 @@ export class WorldView {
       .filter(o => !this.projection.isRemoved(o.id));
     return { active: this.near.filter(c => this.chunks.has(c.key)).length, desired: this.near.length,
       cached: this.chunks.size, calls: render.calls, triangles: render.triangles,
-      geometries: memory.geometries, chunkMs: this.lastChunkMs, maxChunkMs: this.maxChunkMs, objects: objects.length,
-      crowns: crownOverlaps(objects), ...this.faunaActors.diagnostics() };
+      geometries: memory.geometries, renderWidth: this.renderWidth, renderHeight: this.renderHeight, pixelScale: this.pixelScale,
+      gpuMs: this.gpuTimer.average(), renderCpuMs: this.renderCpuMs ?? 0, gpuDensityCap: this.gpuBudget.cap,
+      chunkMs: this.lastChunkMs, maxChunkMs: this.maxChunkMs, objects: objects.length,
+      crowns: crownOverlaps(objects), faunaCpuMs: this.faunaCpuMs ?? 0,
+      ...this.vegetation.diagnostics(), ...this.faunaActors.diagnostics() };
   }
 
   destroy() {
+    this.waterReflections.dispose();
+    this.outerOcean.geometry.dispose();
     this.faunaActors.dispose();
     for (const chunk of this.chunks.values()) this.release(chunk);
+    this.vegetation.dispose();
     this.bank.clear();
-    this.ocean.geometry.dispose();
     this.traveler.userData.dispose();
     for (const mat of Object.values(this.materials)) mat.dispose();
     this.sun.shadow.dispose();
@@ -385,6 +445,7 @@ export class WorldView {
       for (const line of this.walkwayOverlay.children) line.material.dispose();
     }
     this.pixelArt.dispose();
+    this.gpuTimer.dispose();
     this.renderer.dispose();
   }
 }

@@ -2,9 +2,8 @@ import * as T from 'three';
 import { BIOMES, CHUNK } from '../world/catalog.js';
 import { clamp, gridSample, hash } from '../world/math.js';
 import { insideFort } from '../world/fortifications.js';
-import { waterVertex } from '../world/terrain/water.js';
-import { waterMesh } from './water.js';
-import { beachMesh } from './coast.js';
+import { terrainTextureWeights } from './terrain-textures.js';
+import { waterGeometry, swashGeometry } from './water-geometry.js';
 
 const palette = BIOMES.map(b => new T.Color(b.color));
 const loam = new T.Color('#a58755');
@@ -20,11 +19,9 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
   const { roads, paved } = index;
   const key = cx + ',' + cz;
   const forts = index.yards.get(key) ?? [], fields = index.fields.get(key) ?? [];
-  const positions = [], colors = [], triangles = [];
+  const positions = [], colors = [], triangles = [], textureA = [], textureB = [];
   const x0 = cx * CHUNK, z0 = cz * CHUNK;
   const x1 = Math.min(config.size, x0 + CHUNK), z1 = Math.min(config.size, z0 + CHUNK), side = x1 - x0 + 1;
-  const vertices = [];
-  let hasWater = false;
   for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
     const i = z * stride + x, y = ground.at(i);
     const dx = (ground.at(i + (x < stride - 1 ? 1 : 0)) - ground.at(i - (x > 0 ? 1 : 0))) / 2;
@@ -35,13 +32,15 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
     if (wet.at(i) > 0) base.lerp(loam, .44);
     if (grade > .6 && wet.at(i) <= 0 && biome.at(i) !== 9) base.lerp(cliff, clamp((grade - .6) * .84));
     if (config.style === 'spring' && [2, 3, 4, 10, 11].includes(biome.at(i))) base.g *= 1.19;
+    let sandAmount = 0;
     if(world.beachDistance && wet.at(i)<=0 && y<4.) {
-      const sandAmount=clamp((14.-world.beachDistance.at(i))/5.)*clamp((4.-y)/1.5);
+      sandAmount=clamp((14.-world.beachDistance.at(i))/5.)*clamp((4.-y)/1.5);
       base.lerp(palette[1],sandAmount);
     }
     const plot = fields.find(f => Math.abs(f.x - x) <= 2 && Math.abs(f.z - z) <= 2);
     if (plot) base.copy((x - plot.x) % 2 ? fieldDark : fieldLight);
-    if (forts.some(bounds => insideFort(bounds, x, z))) base.lerp(courtyard, .77);
+    const fort = forts.some(bounds => insideFort(bounds, x, z));
+    if (fort) base.lerp(courtyard, .77);
     if (roads.has(i)) {
       base.copy(paved.has(i) ? cobbles : road);
       if (paved.has(i)) base.multiplyScalar(.90 + seed * .19);
@@ -52,8 +51,10 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
     if (light < .79) base.b += (.79 - light) * .09;
     positions.push(x, y, z);
     colors.push(base.r, base.g, base.b);
-    if (wet.at(i) > 0) hasWater = true;
-    vertices.push(waterVertex(world, x, z, y));
+    const weights = terrainTextureWeights(biome.at(i), wet.at(i), grade, sandAmount, !!plot,
+      fort, roads.has(i), paved.has(i));
+    textureA.push(...weights.slice(0, 4));
+    textureB.push(...weights.slice(4));
   }
 
   for (let z = 0; z < z1 - z0; z++) for (let x = 0; x < x1 - x0; x++) {
@@ -64,15 +65,20 @@ export function surfaceMeshes(world, index, cx, cz, materials) {
   const terrain = new T.BufferGeometry();
   terrain.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
   terrain.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
+  terrain.setAttribute('terrainBlendA', new T.Float32BufferAttribute(textureA, 4));
+  terrain.setAttribute('terrainBlendB', new T.Float32BufferAttribute(textureB, 4));
   terrain.setIndex(triangles);
   terrain.computeVertexNormals();
   const land = new T.Mesh(terrain, materials.terrain);
   land.receiveShadow = true;
-  const meshes = [land];
-  const water = hasWater ? waterMesh(world, vertices, triangles, colors, materials.water, index.riverMouths?.get(key)) : null;
-  if (water) meshes.push(water);
-  const wash = beachMesh(world, vertices, triangles, materials.beach);
-  if (wash) meshes.push(wash);
+  const water = materials.water && waterGeometry(world, cx, cz, index.riverMouths?.get(key) ?? []);
+  const meshes = water ? [land, new T.Mesh(water, materials.water)] : [land];
+  const swash = materials.water && swashGeometry(world, cx, cz);
+  if (swash) {
+    const film = new T.Mesh(swash, materials.water);
+    film.raycast = () => {}; // The film does not turn dry sand into navigable water.
+    meshes.push(film);
+  }
   return meshes;
 }
 

@@ -1,7 +1,34 @@
 import * as T from 'three';
-import { coastGLSL } from './coast.js';
+import { loadTerrainAtlas, terrainTextureGLSL } from './terrain-textures.js';
 
 export const makeClock = () => ({ value: 0 });
+
+export function groundcoverMaterial(clock) {
+  const texture = new T.TextureLoader().load(new URL('./assets/megakit-plants.png', import.meta.url).href);
+  texture.colorSpace = T.SRGBColorSpace;
+  texture.magFilter = T.NearestFilter;
+  const material = objectMaterial(clock, true);
+  material.map = texture;
+  material.alphaTest = .45;
+  material.side = T.DoubleSide;
+  material.flatShading = true;
+  const compile = material.onBeforeCompile;
+  material.onBeforeCompile = shader => {
+    compile(shader);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
+      #include <map_fragment>
+      // Broad color steps replace fine gradients on the small leaf cards.
+      float leafLight = dot(diffuseColor.rgb, vec3(.2126, .7152, .0722));
+      if (naturalSurface > 5.5)
+        diffuseColor.rgb = mix(diffuseColor.rgb, leafLight * vec3(.92, 1., .72), .25);
+      // Quantize brightness rather than RGB channels, which made dark shrubs neon green.
+      diffuseColor.rgb *= max(.03, floor(leafLight * 10. + .5) / 10.) / max(.001, leafLight);
+    `);
+  };
+  material.customProgramCacheKey = () => 'groundcover-faceted-v1';
+  material.addEventListener('dispose', () => texture.dispose());
+  return material;
+}
 
 const noiseGLSL = `
 float hashCell(vec2 p) {
@@ -19,30 +46,95 @@ float dither4(vec2 p) {
 
 export function terrainMaterial() {
   const material = new T.MeshLambertMaterial({ vertexColors: true });
+  const atlas = loadTerrainAtlas();
   material.onBeforeCompile = s => {
-    s.vertexShader = 'varying vec3 groundPos;\n' + s.vertexShader.replace('#include <begin_vertex>',
-      '#include <begin_vertex>\n groundPos = position;');
-    s.fragmentShader = 'varying vec3 groundPos;\n' + noiseGLSL + s.fragmentShader
+    s.uniforms.terrainAtlas = { value: atlas };
+    s.vertexShader = 'attribute vec4 terrainBlendA; attribute vec4 terrainBlendB; varying vec4 terrainWeightsA; varying vec4 terrainWeightsB; varying vec3 groundPos;\n' + s.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n groundPos = position; terrainWeightsA = terrainBlendA; terrainWeightsB = terrainBlendB;');
+    s.fragmentShader = 'varying vec3 groundPos;\n' + terrainTextureGLSL + noiseGLSL + s.fragmentShader
       .replace('#include <shadowmap_pars_fragment>', '#include <shadowmap_pars_fragment>\n#include <shadowmask_pars_fragment>')
       .replace('vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
         'vec3 outgoingLight = diffuseColor.rgb * mix(vec3(.49, .54, .62), vec3(1.), getShadowMask());')
       .replace('#include <color_fragment>', `
       #include <color_fragment>
+      vec2 terrainUV = groundPos.xz / 8.;
+      vec3 texel = vec3(0.);
+      float average = 0.;
+      // Only the one or two layers present on a triangle need sampling.
+      for (int layer = 0; layer < 8; layer++) {
+        float weight = layer < 4 ? terrainWeightsA[layer] : terrainWeightsB[layer - 4];
+        if (weight > .001) {
+          vec3 sampled = terrainSample(float(layer), terrainUV);
+          texel += sampled * weight;
+          average += dot(sampled, vec3(.2126, .7152, .0722)) * weight;
+        }
+      }
+      // Keep biome palette and lighting while exposing the supplied surface detail.
+      float footprint = max(length(dFdx(terrainUV)), length(dFdy(terrainUV))) * 256.;
+      float detailStrength = 1. - smoothstep(2., 8., footprint);
+      vec3 hue = texel / max(.015, average);
+      float reliefTone = clamp(average / .24, .55, 1.65);
+      diffuseColor.rgb *= mix(vec3(1.), mix(vec3(1.), hue, .32) * reliefTone, detailStrength * .8);
       vec2 cell = floor(groundPos.xz * 5.);
       float grain = hashCell(cell) - .5;
       float cluster = hashCell(floor(groundPos.xz * 1.6)) - .5;
-      float shade = 1. + grain * .15 + cluster * .12 + (dither4(gl_FragCoord.xy) - .5) * .07;
+      float shade = 1. + grain * .045 + cluster * .035 + (dither4(gl_FragCoord.xy) - .5) * .04;
       diffuseColor.rgb *= shade;
       diffuseColor.rgb += vec3(.031, .024, .012) * step(.982, hashCell(cell + 113.));
     `);
   };
+  material.customProgramCacheKey = () => 'terrain-textures-v1';
+  material.addEventListener('dispose', () => atlas.dispose());
   return material;
 }
 
 export function objectMaterial(clock, wind = false) {
   const material = new T.MeshLambertMaterial({ vertexColors: true });
-  if (!wind) return material;
+  // Procedural vegetation has no surface tags and keeps its original finish.
+  material.defaultAttributeValues = { natureSurface: [0] };
   material.onBeforeCompile = s => {
+    s.vertexShader = 'attribute float natureSurface; varying float naturalSurface; varying vec3 naturalPos;\n' +
+      s.vertexShader.replace('#include <begin_vertex>', `
+      #include <begin_vertex>
+      naturalPos = position;
+      naturalSurface = natureSurface;
+    `);
+    s.fragmentShader = 'varying float naturalSurface; varying vec3 naturalPos;\n' + noiseGLSL +
+      s.fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      if (naturalSurface > .5) {
+        // Object-space pattern stays anchored during camera motion and wind.
+        vec2 uv = naturalPos.xz + naturalPos.y * vec2(.37, .61);
+        float tone = 1.;
+        if (naturalSurface < 1.5) {
+          vec2 patches = uv * 3.2;
+          float visible = 1. - smoothstep(.5, 1.3, max(fwidth(patches.x), fwidth(patches.y)));
+          float clusters = hashCell(floor(patches));
+          float leaves = hashCell(floor(uv * 9.));
+          float fine = 1. - smoothstep(.4, 1.1, max(fwidth(uv.x * 9.), fwidth(uv.y * 9.)));
+          tone += (clusters - .5) * .26 * visible + (leaves - .5) * .13 * fine;
+          tone *= mix(.88, 1., smoothstep(.7, 2.8, naturalPos.y));
+        } else if (naturalSurface < 2.5) {
+          vec2 bark = vec2((naturalPos.x + naturalPos.z) * 14., naturalPos.y * 2.5);
+          float visible = 1. - smoothstep(.4, 1.2, max(fwidth(bark.x), fwidth(bark.y)));
+          float stripe = hashCell(vec2(floor(bark.x), floor(bark.y * .3)));
+          tone += ((stripe - .5) * .36 - .12 * step(.84, fract(bark.x))) * visible;
+        } else if (naturalSurface < 3.5) {
+          vec2 mineral = uv * 7.;
+          float visible = 1. - smoothstep(.4, 1.2, max(fwidth(mineral.x), fwidth(mineral.y)));
+          tone += (hashCell(floor(mineral)) - .5) * .26 * visible;
+          tone += (hashCell(floor(uv * 2.)) - .5) * .12;
+        } else if (naturalSurface < 4.5) {
+          vec2 marks = vec2((naturalPos.x + naturalPos.z) * 8., naturalPos.y * 13.);
+          float visible = 1. - smoothstep(.4, 1.2, max(fwidth(marks.x), fwidth(marks.y)));
+          tone -= step(.86, hashCell(floor(marks))) * .25 * visible;
+        } else {
+          tone += (hashCell(floor(uv * 3.)) - .5) * .06;
+        }
+        diffuseColor.rgb *= tone;
+      }
+    `);
+    if (!wind) return;
     s.uniforms.kingdomTime = clock;
     s.vertexShader = 'uniform float kingdomTime;\n' + s.vertexShader.replace('#include <begin_vertex>', `
       #include <begin_vertex>
@@ -53,6 +145,7 @@ export function objectMaterial(clock, wind = false) {
       #endif
     `);
   };
+  material.customProgramCacheKey = () => 'nature-surface-v1-' + wind;
   return material;
 }
 
@@ -109,227 +202,6 @@ export function buildingMaterial() {
       `);
   };
   return material;
-}
-
-export function waterMaterial(clock) {
-  return new T.ShaderMaterial({
-    uniforms: { kingdomTime: clock, ripple: { value: new T.Vector4() },
-      ...T.UniformsUtils.merge([T.UniformsLib.fog, T.UniformsLib.lights]) },
-    fog: true,
-    lights: true,
-    vertexShader: `
-      #include <common>
-      attribute float waterDepth;
-      attribute float bank;
-      attribute float waterRiver;
-      attribute vec3 waterMotion;
-      attribute vec3 waterBed;
-      attribute vec3 waterMix;
-      varying vec3 p;
-      varying vec3 motion;
-      varying vec3 bed;
-      varying vec3 mixing;
-      varying float depth, edge;
-      varying float riverStyle;
-      #include <fog_pars_vertex>
-      #include <shadowmap_pars_vertex>
-      void main() {
-        p = position;
-        depth = waterDepth;
-        edge = bank;
-        riverStyle = waterRiver;
-        motion = waterMotion;
-        bed = waterBed;
-        mixing = waterMix;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.);
-        vec4 worldPosition = modelMatrix * vec4(position, 1.);
-        vec3 transformedNormal = normalMatrix * vec3(0., 1., 0.);
-        gl_Position = projectionMatrix * mvPosition;
-        #include <shadowmap_vertex>
-        #include <fog_vertex>
-      }`,
-    fragmentShader: `
-      uniform float kingdomTime;
-      uniform vec4 ripple;
-      varying vec3 p;
-      varying vec3 motion;
-      varying vec3 bed;
-      varying vec3 mixing;
-      varying float depth, edge;
-      varying float riverStyle;
-      #include <common>
-      #include <fog_pars_fragment>
-      #include <bsdfs>
-      #include <lights_pars_begin>
-      #include <shadowmap_pars_fragment>
-      #include <shadowmask_pars_fragment>
-      ${noiseGLSL}
-      ${coastGLSL}
-      float waterNoise(vec2 p) {
-        vec2 cell = floor(p);
-        vec2 t = fract(p);
-        t = t * t * (3. - 2. * t);
-        return mix(mix(hashCell(cell), hashCell(cell + vec2(1., 0.)), t.x),
-                   mix(hashCell(cell + vec2(0., 1.)), hashCell(cell + 1.), t.x), t.y);
-      }
-      float riverFoam(vec2 p, vec2 flow) {
-        vec2 direction=flow/max(length(flow),.001);
-        vec2 local=vec2(dot(p,direction),dot(p,vec2(-direction.y,direction.x)));
-
-        return coastNoise(local*vec2(.55,1.3))*.65 + coastNoise(local*vec2(1.1,2.2))* .35;
-      }
-      float mouthEddy(vec2 local, float time, float spin) {
-        float radius = length(local);
-        float angle = atan(local.y, local.x + .00001);
-        return sin(angle + radius * 7.5 - time * spin) * exp(-radius * radius * 1.9);
-      }
-      void main() {
-        vec2 q = p.xz;
-        float sea = motion.z;
-        float speed = length(motion.xy);
-        float current = smoothstep(.035, .8, speed) * smoothstep(.035, .34, depth);
-        float advected = .5;
-        if (current > 0.) {
-          float a = fract(kingdomTime * .27);
-          float b = fract(a + .5);
-          vec2 travel = motion.xy * 4.5;
-          advected = mix(riverFoam(q - travel * b, motion.xy),
-            riverFoam(q - travel * a, motion.xy), 1. - abs(a * 2. - 1.));
-        }
-        float warp = waterNoise(q * .22);
-        // Blend the wave signals instead of the frequency to avoid compressed crests at the mouth.
-        vec2 lakeWave = vec2(1.25, 1.73), seaWave = vec2(.46, .74);
-        float lakePhase = dot(q, lakeWave) - kingdomTime * .58 + warp * 3.6;
-        // Positive depth increases offshore: +time sends crests toward shallower water.
-        vec2 seaGradient=coastGradient(q,depth);
-        float nearCoast=1.-smoothstep(3.,8.,depth);
-        float offshorePhase=dot(q,seaWave)-kingdomTime*1.45+warp*2.8;
-        float seaPhase=depth*.85+kingdomTime*1.05+warp*.35;
-        float packets=smoothstep(.28,.72,coastNoise(q*.12+vec2(kingdomTime*.025,0.)));
-        float seaSignal=mix(sin(offshorePhase),sin(seaPhase),nearCoast)*packets;
-        vec2 seaSlope=mix(seaWave*cos(offshorePhase),seaGradient*.85*cos(seaPhase),nearCoast)*packets;
-        seaWave=mix(seaWave,normalize(seaGradient+vec2(.00001))*max(.12,length(seaGradient)*2.8),nearCoast);
-        float receiver = mix(sin(lakePhase), seaSignal, sea);
-        lakePhase += current * (advected - .5) * 5.2;
-        seaPhase += current * (advected - .5) * 3.6;
-        float fine = dot(q, vec2(1.1, -.65)) - kingdomTime * .7 - warp * 2.;
-        float wave = mix(sin(lakePhase), seaSignal, sea) * .8 + sin(fine) * .2;
-        vec2 slope = mix(lakeWave * cos(lakePhase) * .026, seaSlope * .085, sea)
-          + vec2(.018, -.012) * cos(fine)
-          + vec2(.026, .023) * mix(cos(lakePhase * 1.86 + fine * .31), (coastNoise(q*.4+kingdomTime*.06)-.5), sea);
-        vec2 acrossFlow = vec2(-motion.y, motion.x);
-        slope = slope * (1. - current * .48)
-          + motion.xy * (advected - .5) * .24
-          + acrossFlow * sin(lakePhase + seaPhase * .35) * current * .045;
-        float collision = 0., eddies = 0.;
-        float transition = mixing.x * smoothstep(.07, .65, depth);
-        if (transition > .01) {
-          vec2 local = vec2(mixing.y * 3., mixing.z * 2.8);
-          vec2 drift = vec2(sin(kingdomTime * .31), cos(kingdomTime * .27)) * .12;
-          eddies = mouthEddy(local - vec2(.8, .8) - drift, kingdomTime, 1.15)
-            + mouthEddy(local - vec2(1.55, -.8) + drift, kingdomTime, -.95);
-          float meeting = mixing.y * 12.5 + kingdomTime * 1.35
-            + sin(mixing.z * 5. + kingdomTime * .47) * 1.6 + warp * 2.;
-          collision = smoothstep(.42, .98, sin(meeting))
-            * (.45 + .55 * smoothstep(-.5, .85, receiver))
-            * smoothstep(.12, .72, waterNoise(q * .72 - motion.xy * kingdomTime * .21));
-          slope += transition * (motion.xy * (collision - .35) * .20
-            + acrossFlow * eddies * .18);
-          wave += transition * (collision * .35 + eddies * .2);
-        }
-        vec3 normal = normalize(vec3(-slope.x, 1., -slope.y));
-        vec3 eye = vec3(viewMatrix[0].z, viewMatrix[1].z, viewMatrix[2].z);
-        vec3 halfSun = normalize(eye + normalize(vec3(-.45, .7, -.24)));
-        float sky = pow(1. - max(0., dot(eye, normal)), 3.);
-        float glint = pow(max(0., dot(normal, halfSun)), 52.) * (.72 + .28 * wave);
-
-        float absorb = 1. - exp(-depth * mix(.94, 1.32, sea));
-        vec3 clearWater = mix(vec3(.057, .165, .153), vec3(.043, .165, .174), sea);
-        vec3 deepWater = mix(vec3(.018, .062, .071), vec3(.012, .061, .086), sea);
-        vec3 color = mix(clearWater, deepWater, absorb);
-        float bottom = exp(-depth * mix(1.9, 1.55, sea)) * (.83 - sky * .26);
-        float sand = hashCell(floor((q + slope * min(depth, 1.)) * 5.));
-        vec3 tintedBed = bed * vec3(.82, .96, .91) * mix(.93, 1.06, sand);
-        color = mix(color, tintedBed, bottom);
-        color = mix(color, vec3(.26, .38, .43), sky * (.22 + absorb * .26));
-        color += vec3(.105, .13, .14) * glint * (1.-riverStyle) * (.32 + absorb * .68) * (.55 + warp * .45);
-
-        float coast = sea * (1. - current * .87);
-        vec2 shoreGradient = coastGradient(q, depth);
-        float foam = 0.;
-        if (coast > .01 && depth < 2.6) {
-          foam = coastalFoam(q, depth, shoreGradient, kingdomTime).x * coast;
-        }
-        float grade = length(vec2(dFdx(p.y), dFdy(p.y)))
-          / max(.001, length(vec2(length(dFdx(q)), length(dFdy(q)))));
-        if (riverStyle > .01) {
-          float shallow = (1. - smoothstep(.13, .55, edge)) * smoothstep(.025, .13, depth);
-          float rapids = smoothstep(.14, .72, grade);
-          float broadFoam=coastNoise(q*.48-motion.xy*kingdomTime*.32+vec2(kingdomTime*.025,0.));
-          float streaks = smoothstep(.60,.80,broadFoam);
-          foam += riverStyle * streaks * (.30 + shallow * .08 + rapids * .10);
-
-        }
-
-        foam += transition * smoothstep(.65,.9,collision)*.12;
-        color *= mix(vec3(1.), vec3(1.075, 1.025, .94), transition * (.45 + eddies * .16));
-
-        color = mix(color, vec3(.62, .72, .69), clamp(foam, 0., .8));
-
-        if (ripple.w > 0.) {
-          float crest = abs(length(q - ripple.xy) - (.18 + ripple.z * 1.8));
-          float ring = (1. - smoothstep(.045, .16, crest)) * (1. - ripple.z);
-          color += vec3(.23, .35, .32) * ring * ripple.w;
-        }
-        color *= mix(1.,.985 + dither4(gl_FragCoord.xy) * .03,1.-riverStyle);
-        color *= mix(vec3(.38, .51, .63), vec3(1.), getShadowMask());
-        gl_FragColor = vec4(color, 1.);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-        #include <fog_fragment>
-      }`
-  });
-}
-
-export function beachMaterial(clock) {
-  return new T.ShaderMaterial({
-    uniforms: { kingdomTime: clock, ...T.UniformsUtils.merge([T.UniformsLib.fog]) },
-    transparent: true, depthWrite: false, fog: true,
-    vertexShader: `
-      varying vec3 p;
-      varying float mask;
-      attribute float coastMask;
-      #include <fog_pars_vertex>
-      void main() {
-        p = position;
-        mask = coastMask;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.);
-        gl_Position = projectionMatrix * mvPosition;
-        #include <fog_vertex>
-      }`,
-    fragmentShader: `
-      uniform float kingdomTime;
-      varying vec3 p;
-      varying float mask;
-      #include <common>
-      #include <fog_pars_fragment>
-      ${noiseGLSL}
-      ${coastGLSL}
-      void main() {
-        float height = p.y - .018;
-        vec2 gradient = coastGradient(p.xz, -height);
-        if (height < .012 || height > .22 || mask < .05) discard;
-        vec2 wash = coastalFoam(p.xz, -height, gradient, kingdomTime);
-        float coverage = smoothstep(.05, .8, mask) * (1. - smoothstep(.17, .22, height));
-        float alpha = (wash.x * .82 + wash.y * .16) * coverage;
-        if (alpha < .002) discard;
-        vec3 color = mix(vec3(.035, .065, .057), vec3(.68, .76, .73), clamp(wash.x * 2.2, 0., 1.));
-        gl_FragColor = vec4(color, alpha);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-        #include <fog_fragment>
-      }`
-  });
 }
 
 export const shadowMaterial = () => new T.ShaderMaterial({

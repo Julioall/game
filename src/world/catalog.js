@@ -2,7 +2,7 @@ export const CHUNK = 32;
 export const MAX_MAP_SIZE = 5000;
 export const HEADWATER_GROVE_RADIUS = 16;
 export const VERSION = 1;
-export const HYDROLOGY_VERSIONS = Object.freeze([1, 2, 3, 4]);
+export const HYDROLOGY_VERSIONS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 export const LATEST_HYDROLOGY = HYDROLOGY_VERSIONS.at(-1);
 export const TRAVERSAL_PROFILE = Object.freeze({
   tick: 1 / 30, wadeDepth: .15, swimDepth: 1, arrivalDistance: .14,
@@ -38,7 +38,8 @@ export const SPECIES = {
   birch: { name: 'Bétula', height: 4.55, radius: 1, colors: ['#64652e','#8e8d3c','#b3a84e','#d0b75b'] },
   pine: { name: 'Pinheiro', height: 5.6, radius: 1.12, colors: ['#344e44','#46644d','#58805b','#789667'] },
   willow: { name: 'Salgueiro', height: 3.8, radius: 1.6, colors: ['#4f6636','#6e843c','#869b4a','#a5ac56'] },
-  acacia: { name: 'Acácia', height: 3.2, radius: 1.48, colors: ['#696c3c','#868943','#a19e49','#ada251'] }
+  acacia: { name: 'Acácia', height: 3.2, radius: 1.48, colors: ['#696c3c','#868943','#a19e49','#ada251'] },
+  palm: { name: 'Palmeira', height: 5.2, radius: 1.4, colors: ['#526d3b','#6e8441','#91a052'] }
 };
 export const STRUCTURES = {
   cottage: { name: 'Casa de enxaimel', footprint: 2.6, floors: 1 },

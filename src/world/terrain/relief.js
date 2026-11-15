@@ -14,7 +14,11 @@ export function geography(config, stride) {
     const u = x / size, v = z / size, i = z * stride + x;
     const warp = noise(u * 2.8 + 9, v * 2.8) * .050;
     const warp2 = noise(u * 2.8, v * 2.8 - 9) * .045;
-    const px = u + warp, pz = v + warp2;
+    // Bend local valleys at a world-space scale as well as the broad landmass.
+    // Versioned because moving drainage also moves settlement/resource placement.
+    const bend = config.hydrology >= 5 ? Math.min(10, size * .012) / size : 0;
+    const px = u + warp + (bend ? noise(x / 74 + 31, z / 74) * bend : 0);
+    const pz = v + warp2 + (bend ? noise(x / 74, z / 74 - 31) * bend : 0);
     const broad = noise(px * 3.3, pz * 3.3);
     const axis = (px - .34) * Math.sin(mountainAngle) + (pz - .24) * Math.cos(mountainAngle);
     const long = (px - .34) * Math.cos(mountainAngle) - (pz - .24) * Math.sin(mountainAngle);

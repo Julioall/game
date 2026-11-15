@@ -47,7 +47,8 @@ export function generate(input = {}, { compact = false, onProgress } = {}) {
   }
   world.metrics = {
     generationMs: performance.now() - started, lakes: count, riverEdges: fields.edges,
-    headwaterPonds: fields.headwaters.length, headwaterSteps: fields.headwaterSteps,
+    headwaterPonds: config.hydrology >= 6 ? 0 : fields.headwaters.length,
+    lakeOutlets: config.hydrology >= 6 ? fields.headwaters.length : 0, headwaterSteps: fields.headwaterSteps,
     confluences: fields.confluences, falls: fields.falls.length,
     realms: world.realms.length, cities: world.towns.filter(t => t.fort || t.cityWall).length,
     villages: world.towns.filter(t => t.kind === 'village').length,
