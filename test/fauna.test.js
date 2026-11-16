@@ -7,6 +7,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateChunkFauna, FaunaSpatialIndex } from '../src/world/fauna.js';
 import { FaunaActors } from '../src/render/fauna.js';
+import { faunaAppearanceOptions } from '../src/render/fauna-variants.js';
+import { FAUNA_SPECIES } from '../src/world/fauna-catalog.js';
 
 function meadow() {
   const stride = 65;
@@ -125,7 +127,7 @@ test('ambient motion stops at obstacles and advances over free dry ground', () =
 
 test('population quotas total 1024 and preserve all species minimums', () => {
   const quotas = faunaPopulationTargets();
-  assert.equal(Object.keys(quotas).length, 24);
+  assert.equal(Object.keys(quotas).length, 22);
   assert.equal(
     Object.values(quotas).reduce((a, b) => a + b, 0),
     1024
@@ -350,4 +352,37 @@ test('distant animation does less work while conserving elapsed animation time',
   assert.ok(Math.abs(elapsed + view.actors.get(record.id).animationTime - 1) < 1e-8);
   assert.equal(view.actors.size, 1);
   view.dispose();
+});
+
+test('temperate catalog excludes savanna predators from the world and population', () => {
+  assert.equal(FAUNA_SPECIES.lion, undefined);
+  assert.equal(FAUNA_SPECIES.cheetah, undefined);
+  assert.equal(faunaPopulationTargets().lion, undefined);
+  assert.equal(faunaPopulationTargets().cheetah, undefined);
+});
+
+test('cows, foxes and chickens receive repeatable individual coat and breed variants', () => {
+  for (const species of ['cow', 'fox', 'chicken']) {
+    const variants = FAUNA_SPECIES[species].variants;
+    const records = Array.from({ length: 128 }, (_, i) => ({
+      species, id: `population:1:1769:${species}:${i}`, seed: Math.imul(i + 1, 7919) >>> 0
+    }));
+    const appearances = records.map(faunaAppearanceOptions);
+    assert.deepEqual(records.map(faunaAppearanceOptions), appearances, 'same world and IDs reproduce appearance');
+    assert.deepEqual(new Set(appearances.map(a => a.variant)), new Set(variants));
+    assert.ok(new Set(appearances.map(a => a.seed + ':' + a.variant)).size > variants.length);
+    assert.ok(appearances.every(a => a.seed === 1769 || a.seed === 1770));
+  }
+  const wolf = { species: 'wolf', id: 'wolf:1', seed: 4 };
+  assert.deepEqual(faunaAppearanceOptions(wolf), { seed: 1769 }, 'legacy bakes remain available');
+});
+
+test('ambient pauses are staggered per individual, not synchronized to every 15-second cycle', () => {
+  const simulation = new FaunaMotion(meadow());
+  const first = simulation.step({ id: 'rest-a', species: 'deer', seed: 0,
+    x: 16, y: 3, z: 16, heading: 0 }, 0.1);
+  const second = simulation.step({ id: 'rest-b', species: 'deer', seed: 1,
+    x: 18, y: 3, z: 18, heading: 0 }, 0.1);
+  assert.equal(first.z, 16);
+  assert.ok(second.z > 18);
 });
