@@ -6,9 +6,11 @@ import { createAnimal } from 'procedural-animals';
 import { FAUNA_SPECIES } from '../src/world/fauna-catalog.js';
 
 const manifest = JSON.parse(await readFile('public/fauna/manifest.json', 'utf8'));
-assert.equal(manifest.models.length, Object.keys(FAUNA_SPECIES).length * 2);
+// Keep historical assets in the manifest; validate only the current temperate catalog.
+const activeModels = manifest.models.filter(model => FAUNA_SPECIES[model.species]);
+assert.equal(activeModels.length, Object.keys(FAUNA_SPECIES).length * 2);
 const expected = new Set(Object.keys(FAUNA_SPECIES).flatMap(species => [1769, 1770].map(seed => `${species}:${seed}`)));
-for (const model of manifest.models) {
+for (const model of activeModels) {
   assert.ok(expected.delete(`${model.species}:${model.seed}`), 'unique species and appearance');
   const compressed = await readFile('public/fauna/' + model.file);
   assert.equal(createHash('sha256').update(compressed).digest('hex'), model.sha256);
@@ -26,4 +28,4 @@ for (const model of manifest.models) {
   } finally { animal.dispose(); }
 }
 assert.equal(expected.size, 0);
-console.log(`Validated ${manifest.models.length} baked animals: hashes, seeds, geometry, motion and disposal.`);
+console.log(`Validated ${activeModels.length} active baked animals: hashes, seeds, geometry, motion and disposal.`);
