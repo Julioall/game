@@ -5,7 +5,8 @@ export function createBakedFactory(createAnimal, { fetchAsset = (...args) => fet
   const cache = new Map();
   const stats = { loaded: 0, failures: 0 };
   const factory = async (species, options) => {
-    if (options.baked || options.quality !== 'low' || !FAUNA_SPECIES[species] || ![1769, 1770].includes(options.seed))
+    // The legacy two-seed bakes do not encode an explicitly selected breed/coat.
+    if (options.baked || options.variant != null || options.quality !== 'low' || !FAUNA_SPECIES[species] || ![1769, 1770].includes(options.seed))
       return createAnimal(species, options);
     const key = `${species}-${options.seed}`;
     if (!cache.has(key)) {
