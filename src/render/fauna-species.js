@@ -20,8 +20,6 @@ const loaders = {
   spider: () => import('procedural-animals/species/spider'),
   crow: () => import('procedural-animals/species/crow'),
   eagle: () => import('procedural-animals/species/eagle'),
-  lion: () => import('procedural-animals/species/lion'),
-  cheetah: () => import('procedural-animals/species/cheetah'),
   fish: () => import('procedural-animals/species/fish'),
   shark: () => import('procedural-animals/species/shark'),
 };
