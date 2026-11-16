@@ -47,13 +47,13 @@ test('vegetation only rebuilds changed cells and preserves shared geometry owner
   geometry.dispose(); material.dispose();
 });
 
-test('animation phases spread work and only small distant fauna uses 20 Hz', () => {
+test('animation phases spread work while every animal keeps native 60 Hz movement', () => {
   const phases = Array.from({ length: 32 }, (_, i) => animationPhase('fauna:' + i));
   assert.ok(new Set(phases.map(x => Math.floor(x * 8))).size >= 4);
   const focus = { x: 0, z: 0, span: 112 };
-  assert.equal(faunaProfile({ species: 'rat', x: 55, z: 0 }, focus, 900).interval, 1 / 20);
-  assert.equal(faunaProfile({ species: 'rat', x: 1, z: 0 }, focus, 900).interval, 1 / 30);
-  assert.equal(faunaProfile({ species: 'pig', x: 55, z: 0 }, focus, 900).interval, 1 / 30);
+  assert.equal(faunaProfile({ species: 'rat', x: 55, z: 0 }, focus, 900).interval, 1 / 60);
+  assert.equal(faunaProfile({ species: 'rat', x: 1, z: 0 }, focus, 900).interval, 1 / 60);
+  assert.equal(faunaProfile({ species: 'pig', x: 55, z: 0 }, focus, 900).interval, 1 / 60);
   assert.equal(faunaProfile({ species: 'rat', x: 55, z: 0 }, focus, 900, true).interval, 1 / 60);
   assert.equal(faunaProfile({ species: 'pig', x: 1, z: 0 }, focus, 900).coverings, false);
   assert.equal(faunaProfile({ species: 'pig', x: 1, z: 0 }, { ...focus, span: 30 }, 900).coverings, true);

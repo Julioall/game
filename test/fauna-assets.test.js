@@ -49,3 +49,16 @@ test('missing fauna assets fall back once per appearance without blocking other 
   assert.equal(calls[2].baked, undefined);
   assert.equal(factory.bakeStats.failures, 1);
 });
+
+test('explicit coat variants never load a different baked appearance', async () => {
+  let requests = 0;
+  let supplied;
+  const factory = createBakedFactory(async (_species, options) => {
+    supplied = options;
+    return {};
+  }, { fetchAsset: async () => { requests++; throw new Error('must not load old bake'); } });
+  await factory('cow', { seed: 1769, quality: 'low', variant: 'hereford' });
+  assert.equal(requests, 0);
+  assert.equal(supplied.variant, 'hereford');
+  assert.equal(supplied.baked, undefined);
+});

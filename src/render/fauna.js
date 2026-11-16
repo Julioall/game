@@ -1,5 +1,6 @@
 import { gridSample } from '../world/math.js';
 import { animalArrival } from './fauna-appearance.js';
+import { faunaAppearanceOptions } from './fauna-variants.js';
 import { createBakedFactory } from './fauna-assets.js';
 import { loadFaunaSpecies } from './fauna-species.js';
 import { animationPhase } from './fauna-budget.js';
@@ -77,7 +78,7 @@ export class FaunaActors {
       const createAnimal = await this.loadAnimalFactory();
       if (this.closed || token.cancelled || !this.desired.has(record.id)) return;
       const animal = await createAnimal(record.species, {
-        seed: 1769 + (record.seed % 2),
+        ...faunaAppearanceOptions(record),
         quality: this.quality,
         worker: true,
         ground: this.ground,
@@ -95,7 +96,7 @@ export class FaunaActors {
         this.stats.disposed++;
         return;
       }
-      animal.setLod?.(2);
+      animal.setLod?.(0); // Full gait and skeletal animation, not crowd LOD.
       // Simulation can advance while a Worker is building this model.
       const current = this.readState(record.id) ?? record;
       animal.position?.copy?.(current);

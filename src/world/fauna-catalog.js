@@ -115,8 +115,6 @@ export const FAUNA_SPECIES = Object.freeze({
     clearance: 1.2
   },
   eagle: { label: 'Águia', biomes: { 2: 0.3, 5: 0.2, 7: 0.8 }, variants: ['bald', 'golden'], clearance: 1.2 },
-  lion: { label: 'Leão', biomes: { 5: 0.7, 6: 0.2 }, variants: ['tawny', 'white'], clearance: 1.2 },
-  cheetah: { label: 'Guepardo', biomes: { 5: 0.5, 6: 0.4 }, variants: [], clearance: 1.2 },
   fish: {
     label: 'Peixe',
     biomes: { 0: 1 },

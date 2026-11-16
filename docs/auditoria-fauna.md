@@ -197,3 +197,27 @@ são desligadas abaixo de 16 pixels CSS estimados no mapa amplo e retornam
 de perto. Corpos, olhos, rigs e estado autoritativo permanecem. A acumulação
 conserva tempo de animação. A [comparação de render](otimizacao-render.md) registra
 condições, números e os 47 testes desta revisão.
+
+## Ajustes de bioma, aparências e cadência (15/11/2026)
+
+O catálogo ativo da região temperada foi reduzido de 24 para 22 espécies: leão
+e guepardo não participam mais da população nem do carregamento dinâmico.
+Os arquivos binários históricos desses animais foram preservados em
+`public/fauna` para evitar alterações destrutivas do pacote; a auditoria e
+o verificador passam a considerar apenas espécies ativas.
+
+Vacas, raposas e galinhas agora escolhem raça/pelagem por identidade individual
+(`record.seed` mais `record.id`), de maneira determinística. Cada espécie tem
+suas variantes reais da biblioteca e duas sementes de morfologia por variante,
+gerando até 10 aparências de vaca, 8 de raposa e 12 de galinha. Esse conjunto
+limitado reutiliza o cache de construção. Como as 48 malhas históricas não
+codificam variantes explícitas, esses três grupos são gerados sob demanda
+pelo Worker; os demais animais continuam podendo usar os modelos previamente
+preparados. Não se alteram os registros nem o save.
+
+As poses voltam ao perfil nativo de 60 Hz e ao LOD 0 de animação. A otimização
+de 20/30 Hz e LOD 2, descrita nas seções históricas acima, foi desativada por
+causar rigidez percebida. Os repousos são defasados por seed individual, evitando
+que os animais parem juntos. O custo de CPU e o tempo inicial de construção
+devem ser novamente medidos no navegador, especialmente antes de adotar mais
+variações para outras espécies.

@@ -22,8 +22,11 @@ export class FaunaMotion {
       : aquatic
         ? FAUNA_BEHAVIOR.swimSpeed
         : FAUNA_BEHAVIOR.walkSpeed;
+    // Offset the rest cycle per animal: neighbors must not freeze in sync.
+    const restOffset = hash(s.seed, 0, 0, 97) * FAUNA_BEHAVIOR.pausePeriod;
     const pause =
-      s.time % FAUNA_BEHAVIOR.pausePeriod >= FAUNA_BEHAVIOR.pausePeriod - FAUNA_BEHAVIOR.pauseDuration;
+      (s.time + restOffset) % FAUNA_BEHAVIOR.pausePeriod >=
+      FAUNA_BEHAVIOR.pausePeriod - FAUNA_BEHAVIOR.pauseDuration;
     const heading =
       Math.hypot(s.x - s.homeX, s.z - s.homeZ) > FAUNA_BEHAVIOR.homeRadius
         ? Math.atan2(s.homeX - s.x, s.homeZ - s.z)

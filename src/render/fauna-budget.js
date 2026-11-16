@@ -1,4 +1,4 @@
-import { FAUNA_SPECIES, SMALL_FAUNA } from '../world/fauna-catalog.js';
+import { FAUNA_SPECIES } from '../world/fauna-catalog.js';
 
 export function animationPhase(id) {
   let hash = 2166136261;
@@ -11,10 +11,8 @@ export function animationPhase(id) {
 
 export function faunaProfile(record, focus, height, firstPerson = false) {
   const wide = !firstPerson && focus.span >= 66;
-  const smallFar = wide && focus.span >= 90 && SMALL_FAUNA.has(record.species)
-    && Math.hypot(record.x - focus.x, record.z - focus.z) > focus.span * .35;
   const estimatedPixels = firstPerson ? Infinity
     : height / focus.span * (FAUNA_SPECIES[record.species]?.clearance ?? 1.2) * 1.2;
-  return { interval: smallFar ? 1 / 20 : wide ? 1 / 30 : 1 / 60,
-    coverings: !wide || estimatedPixels >= 16 };
+  // Preserve the library's normal 60 Hz pose update at every viewing distance.
+  return { interval: 1 / 60, coverings: !wide || estimatedPixels >= 16 };
 }
