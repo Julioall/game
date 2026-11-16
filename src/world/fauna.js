@@ -8,7 +8,7 @@ export const FAUNA_GENERATOR_VERSION = 1;
 
 export const FAUNA_CELL_SIZE = 8;
 
-// All 24 species retain the habitat weights from Kingdom Fauna Lab.
+// The active catalog includes species compatible with this temperate game world.
 
 function fieldValue(field, index) {
   return ArrayBuffer.isView(field) || Array.isArray(field) ? field[index] : field.at(index);
@@ -225,7 +225,7 @@ export function aquaticHabitat(world, species, x, z) {
 
 export const FAUNA_POPULATION_SIZE = 1024;
 export function faunaPopulationTargets(total = FAUNA_POPULATION_SIZE) {
-  const predators = new Set(['wolf', 'bear', 'eagle', 'lion', 'cheetah', 'shark']);
+  const predators = new Set(['wolf', 'bear', 'eagle', 'shark']);
   const rows = Object.keys(FAUNA_SPECIES).map((species) => ({
     species,
     minimum: SMALL_FAUNA.has(species) ? 10 : 5,
