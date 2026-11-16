@@ -23,6 +23,7 @@ Abra o endereço mostrado no terminal. Para verificar, use `npm test`, `npm run 
 | [Arquitetura-alvo](docs/arquitetura-alvo.md) | Limites dos módulos, contratos e decisões sobre ECS, eventos e simulação |
 | [Protótipo e migração](docs/prototipo-e-migracao.md) | Estrutura do código, migração concluída e próximo recorte jogável |
 | [Validação e desempenho](docs/validacao.md) | Linha de base, cenários, métricas e critérios de aceitação |
+| [SPEC-FAUNA-001 — IA ecológica](docs/specs/fauna-inteligencia-comportamento.md) | Plano completo de inteligência e comportamento animal, fases F00–F11, contratos e testes |
 | [AGENTS.md](AGENTS.md) | Orientações de trabalho para quem der continuidade ao projeto |
 
 As propostas estão identificadas como tais. O estado do protótipo e os comandos de execução local ficam no guia de migração.
