@@ -369,7 +369,7 @@ export class WorldView {
     const dt = this.previousDraw === undefined ? 0 : seconds - this.previousDraw;
     this.previousDraw = seconds;
     this.faunaActors.radius = Math.max(44, this.focus.span * Math.hypot(this.aspect, 1));
-    this.faunaActors.animationInterval = this.firstPerson || this.focus.span < 66 ? 1 / 60 : 1 / 30;
+    this.faunaActors.animationInterval = 1 / 60;
     const faunaStarted = performance.now();
     this.faunaActors.update(this.focus, dt, performance.now() / 1000);
     const faunaMs = performance.now() - faunaStarted;
