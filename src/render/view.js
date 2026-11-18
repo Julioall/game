@@ -16,6 +16,7 @@ import { travelerModel } from './traveler.js';
 import { FaunaActors } from './fauna.js';
 import { faunaProfile } from './fauna-budget.js';
 import { GpuTimer, GpuDensityBudget } from './gpu-timer.js';
+import { FrameMetrics } from './frame-metrics.js';
 import { waterMaterial } from './water.js';
 import { outerOceanGeometry } from './water-geometry.js';
 import { WaterReflections } from './water-reflections.js';
@@ -48,6 +49,10 @@ export class WorldView {
     this.renderer = new T.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.gpuTimer = new GpuTimer(this.renderer.getContext());
     this.gpuBudget = new GpuDensityBudget();
+    this.frameMetrics = new FrameMetrics();
+    this.gpuSampleSerial = 0;
+    this.startedAt = performance.now();
+    this.firstFrameMs = null;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
@@ -383,7 +388,12 @@ export class WorldView {
     this.waterReflections.update(this.renderer, this.scene, this.camera, this.world, this.focus, performance.now());
     this.pixelArt.render(this.renderer, this.scene, this.camera);
     this.gpuTimer.end();
+    if (this.firstFrameMs === null) this.firstFrameMs = performance.now() - this.startedAt;
     const cpuMs = performance.now() - cpuStarted;
+    const newGpu = this.gpuTimer.serial !== this.gpuSampleSerial;
+    this.gpuSampleSerial = this.gpuTimer.serial;
+    this.frameMetrics.record(dt, cpuMs, newGpu ? this.gpuTimer.lastSampleMs : null,
+      performance.memory?.usedJSHeapSize ?? null);
     this.renderCpuMs = this.renderCpuMs === undefined ? cpuMs : this.renderCpuMs * .9 + cpuMs * .1;
     const stable = !this.firstPerson && this.focus.span >= 66 && !this.vegetation.dirty.size
       && !this.faunaActors.pending.size && this.near.every(entry => {
@@ -428,6 +438,8 @@ export class WorldView {
       cached: this.chunks.size, calls: render.calls, triangles: render.triangles,
       geometries: memory.geometries, renderWidth: this.renderWidth, renderHeight: this.renderHeight, pixelScale: this.pixelScale,
       gpuMs: this.gpuTimer.average(), renderCpuMs: this.renderCpuMs ?? 0, gpuDensityCap: this.gpuBudget.cap,
+      worldGenerationMs: this.world.metrics?.generationMs ?? null, firstFrameMs: this.firstFrameMs,
+      ...this.frameMetrics.snapshot(),
       chunkMs: this.lastChunkMs, maxChunkMs: this.maxChunkMs, objects: objects.length,
       crowns: crownOverlaps(objects), faunaCpuMs: this.faunaCpuMs ?? 0,
       ...this.vegetation.diagnostics(), ...this.faunaActors.diagnostics() };
