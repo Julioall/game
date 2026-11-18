@@ -29,7 +29,7 @@ export class FaunaMotion {
     const heading = intent?.heading ?? (Math.hypot(s.x - s.homeX, s.z - s.homeZ) > FAUNA_BEHAVIOR.homeRadius
         ? Math.atan2(s.homeX - s.x, s.homeZ - s.z) : s.heading);
     s.velocity = { x: 0, y: 0, z: 0 };
-    s.action = intent?.action ?? 'idle';
+    s.action = intent?.action; // Legacy walkers still derive walk/idle from actual velocity.
     if (pause || intent?.stop || dt <= 0) return s;
     for (const angle of [0, 0.55, -0.55, 1.1, -1.1, Math.PI]) {
       const h = heading + angle,
