@@ -3,6 +3,9 @@ import { CHUNK } from '../world/catalog.js';
 import { clipWater, flowDirection, waterVertex } from '../world/terrain/water.js';
 import { waterMotion } from './water-motion.js';
 
+// Keep the surface barely above the physical water plane to avoid z-fighting.
+export const WATER_SURFACE_OFFSET = .004;
+
 // Use the same triangles and shoreline interpolation as the authoritative query.
 export function waterGeometry(world, cx, cz, mouths = []) {
   const positions = [], data = [], flows = [], transitions = [], shores = [];
@@ -18,7 +21,7 @@ export function waterGeometry(world, cx, cz, mouths = []) {
     return cache.get(i);
   };
   function emit(v) {
-    positions.push(v.x, v.y + .012, v.z);
+    positions.push(v.x, v.y + WATER_SURFACE_OFFSET, v.z);
     let seaBlend = v.kind === 1 ? 1 : 0;
     // The current plume is the opacity of the river detail layer. It fades
     // continuously along and across the full estuary, never at the beach.
@@ -68,7 +71,7 @@ export function outerOceanGeometry(size, margin = 350) {
   const positions = [], data = [], flows = [];
   const rect = (x0, z0, x1, z1) => {
     for (const [x, z] of [[x0,z0],[x0,z1],[x1,z0],[x1,z0],[x0,z1],[x1,z1]]) {
-      positions.push(x, .012, z); data.push(6, 0, 1); flows.push(0, 0);
+      positions.push(x, WATER_SURFACE_OFFSET, z); data.push(6, 0, 1); flows.push(0, 0);
     }
   };
   rect(-margin, -margin, size + margin, 0);

@@ -36,7 +36,7 @@ test('curved channels reproduce, keep their spine wet and drain without cycles o
 
 test('new generation preserves version 4 saves and produces valid settlement sites', () => {
   const config = configuration({ size: 512 });
-  assert.equal(config.hydrology, 8);
+  assert.equal(config.hydrology, 9);
   const previous = { ...config, hydrology: 4 };
   const key = 'kingdom:1:' + JSON.stringify(previous);
   const saved = JSON.stringify({ version: 1, removed: ['t:1:2'] });

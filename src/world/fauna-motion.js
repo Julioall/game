@@ -9,7 +9,7 @@ export class FaunaMotion {
     this.blocked = blocked;
     this.states = new Map();
   }
-  step(record, dt) {
+  step(record, dt, intent = null) {
     let s = this.states.get(record.id);
     if (!s) {
       s = { ...record, homeX: record.x, homeZ: record.z, time: 0, turn: 0, velocity: { x: 0, y: 0, z: 0 } };
@@ -17,22 +17,20 @@ export class FaunaMotion {
     }
     s.time += dt;
     const aquatic = ['fish', 'shark'].includes(s.species);
-    const speed = ['snake', 'spider', 'rat', 'frog'].includes(s.species)
+    const speed = intent?.speed ?? (['snake', 'spider', 'rat', 'frog'].includes(s.species)
       ? FAUNA_BEHAVIOR.smallSpeed
       : aquatic
         ? FAUNA_BEHAVIOR.swimSpeed
-        : FAUNA_BEHAVIOR.walkSpeed;
+        : FAUNA_BEHAVIOR.walkSpeed);
     // Offset the rest cycle per animal: neighbors must not freeze in sync.
     const restOffset = hash(s.seed, 0, 0, 97) * FAUNA_BEHAVIOR.pausePeriod;
-    const pause =
-      (s.time + restOffset) % FAUNA_BEHAVIOR.pausePeriod >=
+    const pause = !intent && (s.time + restOffset) % FAUNA_BEHAVIOR.pausePeriod >=
       FAUNA_BEHAVIOR.pausePeriod - FAUNA_BEHAVIOR.pauseDuration;
-    const heading =
-      Math.hypot(s.x - s.homeX, s.z - s.homeZ) > FAUNA_BEHAVIOR.homeRadius
-        ? Math.atan2(s.homeX - s.x, s.homeZ - s.z)
-        : s.heading;
+    const heading = intent?.heading ?? (Math.hypot(s.x - s.homeX, s.z - s.homeZ) > FAUNA_BEHAVIOR.homeRadius
+        ? Math.atan2(s.homeX - s.x, s.homeZ - s.z) : s.heading);
     s.velocity = { x: 0, y: 0, z: 0 };
-    if (pause || dt <= 0) return s;
+    s.action = intent?.action; // Legacy walkers still derive walk/idle from actual velocity.
+    if (pause || intent?.stop || dt <= 0) return s;
     for (const angle of [0, 0.55, -0.55, 1.1, -1.1, Math.PI]) {
       const h = heading + angle,
         dx = Math.sin(h),

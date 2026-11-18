@@ -52,7 +52,7 @@ test('lake reflection hides water from its own pass, restores state and throttle
   const run = (w, now) => f.reflection.update(f.renderer, f.scene, f.camera, w, f.focus, now);
   run(world(), 0);
   assert.equal(f.material.uniforms.reflectionReady.value, 1);
-  assert.equal(f.material.uniforms.reflectionLevel.value, 2.012);
+  assert.equal(f.material.uniforms.reflectionLevel.value, 2.004);
   assert.equal(f.mesh.visible, true);
   assert.equal(f.renderer.shadowMap.needsUpdate, true);
   run(world(), 50); assert.equal(calls, 1);

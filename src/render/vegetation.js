@@ -150,40 +150,9 @@ export function instances(objects, bank, materials, distant) {
       return n + retained;
     }, 0);
     const mesh = new T.InstancedMesh(geometry, material, count);
-    if (['grass', 'flower', 'reed', 'crop'].includes(entries[0].kind)) {
-      const plantMaterial = material.clone();
-      const compile = material.onBeforeCompile;
-      plantMaterial.onBeforeCompile = shader => {
-        compile(shader);
-        shader.uniforms.grassView = grassView;
-        const classic = entries[0].classicGrass === true;
-        const rate = classic ? distantClassicGrassRate : distantPlantRates[entries[0].kind];
-        const stream = 1700 + (classic ? 5 : distantPlantStreams[entries[0].kind]);
-        shader.vertexShader = `uniform vec3 grassView;
-          float grassRank(vec2 p) {
-            uint h = uint(int(floor(p.x * 256.))) * 0x9e3779b1u ^ uint(int(floor(p.y * 256.))) * 0x85ebca77u ^ ${stream}u * 0x27d4eb2du;
-            h = (h ^ (h >> 16u)) * 0x21f0aaadu;
-            h = (h ^ (h >> 15u)) * 0x735a2d97u;
-            return float(h ^ (h >> 15u)) / 4294967296.;
-          }
-        ` + shader.vertexShader.replace('#include <begin_vertex>', `
-          #include <begin_vertex>
-          #ifdef USE_INSTANCING
-            vec2 origin = instanceMatrix[3].xz;
-            float rank = grassRank(origin);
-            float zoomFade = smoothstep(38., 64., grassView.z);
-            float distanceFade = smoothstep(22., 44., distance(origin, grassView.xy));
-            float fade = max(zoomFade, distanceFade);
-            float threshold = (rank - ${rate}) / ${1-rate};
-            float removal = smoothstep(max(0., threshold - .22), max(.001, threshold), fade);
-            transformed *= rank < ${rate} ? 1. : 1. - removal;
-          #endif
-        `);
-      };
-      plantMaterial.customProgramCacheKey = () => material.customProgramCacheKey() + '-grass-gradual-v3-' + entries[0].kind + entries[0].classicGrass;
-      mesh.material = plantMaterial;
-      mesh.addEventListener('dispose', () => plantMaterial.dispose());
-    }
+    // Instancing retains every visible blade. There is no per-frame hash,
+    // zoom fade or vertex collapse here; distant representations can be
+    // prepared separately and swapped only while outside the camera.
     let instance = 0;
     for (const o of entries) {
       const fit = o.kind === 'tree' && o.flora?.renderSpecies

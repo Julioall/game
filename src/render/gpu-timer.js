@@ -22,6 +22,7 @@ export class GpuTimer {
       gl.deleteQuery(query);
       if (Number.isFinite(ms) && ms > 0) {
         this.samples.push(ms);
+        this.lastSampleMs = ms;
         if (this.samples.length > 64) this.samples.shift();
         this.serial++;
       }
