@@ -4,6 +4,7 @@ import { drain, DX, DZ } from './drainage.js';
 import { carveEstuary, deepenMouth, traceMouthPath } from './water-flow.js';
 import { coastDistances, lakeFedChannels } from './lake-outlets.js';
 import { coldWaterMask } from './cold-water.js';
+import { closeRiverPockets } from './river-pockets.js';
 
 function markLakes(raw, filled, stride, sea, frequency, blocked) {
   const lake = new Uint8Array(raw.length);
@@ -246,7 +247,11 @@ function waterFields(config, raw, drainage, lake, stride, sea, blocked) {
     for (const mouth of riverMouths) carveEstuary(world, mouth);
     for (const mouth of riverMouths) mouth.path = traceMouthPath(world, mouth);
   }
-  return { wet, surface, ground, waterKind, river, falls, edges, confluences, headwaters, headwaterSteps, riverMouths };
+  // Fix raster pinholes only after the river mouths are carved. Never flood an open bank.
+  const repairedRiverCells = config.hydrology >= 9
+    ? closeRiverPockets({ stride, wet, surface, ground, waterKind }, { blocked }) : 0;
+  return { wet, surface, ground, waterKind, river, falls, edges, confluences,
+    headwaters, headwaterSteps, riverMouths, repairedRiverCells };
 }
 
 export function hydrology(config, stride, { raw, rain, heat, sea }) {
