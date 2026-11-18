@@ -244,8 +244,6 @@ export class WorldView {
       if (!frustum.intersectsBox(box)) continue;
       const distance = Math.hypot(center.x - x, center.z - z);
       const key = cx + ',' + cz;
-      const existing = this.chunks.get(key);
-      const limit = existing?.distant ? 45 : 58;
       // Every chunk entering the camera is shown with its complete vegetation.
       // Keep geometry stable throughout panning/zoom: no visible chunk swaps
       // or procedural grass removal while the player is watching.
