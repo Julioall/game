@@ -241,7 +241,10 @@ export class WorldView {
       const key = cx + ',' + cz;
       const existing = this.chunks.get(key);
       const limit = existing?.distant ? 45 : 58;
-      candidates.push({ cx, cz, key, distance, distant: span > 66 || distance > limit });
+      // Every chunk entering the camera is shown with its complete vegetation.
+      // Keep geometry stable throughout panning/zoom: no visible chunk swaps
+      // or procedural grass removal while the player is watching.
+      candidates.push({ cx, cz, key, distance, distant: false });
     }
     this.near = candidates.sort((a, b) => a.distance - b.distance).slice(0, 100);
     const visible = new Set(this.near.map(c => c.key));
