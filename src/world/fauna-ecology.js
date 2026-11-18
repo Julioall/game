@@ -70,6 +70,8 @@ export class FaunaEcology {
     const consumed = Math.min(patch.amount, Math.max(0, consume));
     patch.amount -= consumed;
     this.forage.set(key, patch);
+    // Do not retain an unbounded history of every visited grazing patch.
+    if (this.forage.size > 8192) this.forage.delete(this.forage.keys().next().value);
     return consume > 0 ? consumed : patch.amount;
   }
   nearest(record, kind, now, maxRadius = 18) {
@@ -112,8 +114,10 @@ export class FaunaEcology {
         .sort((a,b) => distance(a,record)-distance(b,record) || a.id.localeCompare(b.id))[0] : null;
     if (fox && distance(record, fox) < 7.5) {
       needs.fear = clamp(needs.fear + .2);
-      return { goal: 'flee', target: { x: record.x + (record.x - fox.x) * 2,
-        z: record.z + (record.z - fox.z) * 2 }, reason: 'predator-visible' };
+      return { goal: 'flee', target: {
+        x: Math.max(3, Math.min(this.world.config.size - 3, record.x + (record.x - fox.x) * 2)),
+        z: Math.max(3, Math.min(this.world.config.size - 3, record.z + (record.z - fox.z) * 2))
+      }, reason: 'predator-visible' };
     }
     if (prey && needs.hunger >= .38 && distance(record, prey) < 16)
       return { goal: 'hunt', target: { x: prey.x, z: prey.z }, targetId: prey.id, reason: 'prey-visible' };
@@ -154,7 +158,7 @@ export class FaunaEcology {
     n.fear = clamp(n.fear - dt * .02);
     s.memory = s.memory.filter(m => m.expires > s.time);
     const threatened = record.species === 'chicken' && nearby.some(a =>
-      a.species === 'fox' && distance(a, record) < 6);
+      a.species === 'fox' && this.state(a).needs.health > 0 && distance(a, record) < 6);
     if (s.time >= s.nextDecision || threatened) {
       const next = this.choose(record, s, nearby);
       if (next.goal !== s.brain.goal || next.targetId !== s.brain.targetId) s.brain.revision++;
