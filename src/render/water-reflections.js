@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { WATER_SURFACE_OFFSET } from './water-geometry.js';
 
 // One nearby lake level, shared reflection target, capped at eight updates/s.
 export class WaterReflections {
@@ -30,7 +31,7 @@ export class WaterReflections {
     const uniforms = this.material.uniforms;
     uniforms.reflectionReady.value = 0;
     if (level === undefined || camera.position.y <= level) return;
-    this.reflector.position.y = level + .012;
+    this.reflector.position.y = level + WATER_SURFACE_OFFSET;
     this.reflector.updateMatrixWorld();
     scene.updateMatrixWorld();
     const hidden = [];
@@ -45,7 +46,7 @@ export class WaterReflections {
       this.reflector.onBeforeRender(renderer, scene, camera);
       this.inverse.copy(this.reflector.matrixWorld).invert();
       uniforms.reflectionMatrix.value.copy(this.reflector.material.uniforms.textureMatrix.value).multiply(this.inverse);
-      uniforms.reflectionLevel.value = level + .012;
+      uniforms.reflectionLevel.value = level + WATER_SURFACE_OFFSET;
       uniforms.reflectionReady.value = 1;
     } finally {
       hidden.forEach(object => { object.visible = true; });
