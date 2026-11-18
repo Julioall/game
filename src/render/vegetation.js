@@ -176,7 +176,8 @@ export function instances(objects, bank, materials, distant) {
             float fade = max(zoomFade, distanceFade);
             float threshold = (rank - ${rate}) / ${1-rate};
             float removal = smoothstep(max(0., threshold - .22), max(.001, threshold), fade);
-            transformed *= rank < ${rate} ? 1. : 1. - removal;
+            // Preserve physical silhouettes while visible; no scale-to-zero LOD.
+            transformed *= 1.;
           #endif
         `);
       };
