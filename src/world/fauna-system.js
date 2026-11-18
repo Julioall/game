@@ -2,6 +2,7 @@ import { FAUNA_BEHAVIOR } from './fauna-catalog.js';
 import { CHUNK } from './catalog.js';
 import { FaunaSpatialIndex, generateFaunaPopulation } from './fauna.js';
 import { FaunaMotion } from './fauna-motion.js';
+import { FaunaEcology } from './fauna-ecology.js';
 import { chunkObjects } from './vegetation.js';
 import { insideFort, insideFortFootprint } from './fortifications.js';
 
@@ -24,6 +25,7 @@ export class FaunaSystem {
     }
     for (const [key, records] of buckets) this.spatial.set(key, records);
     this.motion = new FaunaMotion(world, (x, z, r) => this.blocked(x, z, r));
+    this.ecology = new FaunaEcology(world);
   }
   blocked(x, z, radius) {
     const cx = Math.floor(x / CHUNK),
@@ -64,8 +66,15 @@ export class FaunaSystem {
       this.metrics.active = query.items.length;
       this.metrics.ticks++;
       for (const { record } of query.items) {
-        const previous = record.homeChunk,
-          state = this.motion.step(record, FAUNA_BEHAVIOR.tick);
+        const previous = record.homeChunk;
+        // Pilot species have real needs and habitat-based goals. Only these
+        // species pay for local animal perception and at the world tick rate.
+        const neighbors = ['chicken', 'fox'].includes(record.species)
+          ? this.spatial.query(record.x, record.z, 18).items.map(item => item.record)
+          : [];
+        const intent = this.ecology.plan(record, FAUNA_BEHAVIOR.tick, neighbors);
+        const state = this.motion.step(record, FAUNA_BEHAVIOR.tick, intent);
+        this.ecology.resolve(record, state, intent, FAUNA_BEHAVIOR.tick, neighbors);
         Object.assign(record, { x: state.x, y: state.y, z: state.z, heading: state.heading });
         const key = `${Math.floor(record.x / CHUNK)},${Math.floor(record.z / CHUNK)}`;
         if (key !== previous) {
@@ -83,10 +92,13 @@ export class FaunaSystem {
     const s = this.motion.states.get(id) ?? this.records.get(id);
     if (!s) return null;
     const velocity = { ...(s.velocity ?? { x: 0, y: 0, z: 0 }) };
+    const ecology = this.ecology.read(id);
     return {
       ...s,
+      ...ecology,
       velocity,
-      action: s.action ?? (Math.hypot(velocity.x, velocity.z) > 0.001 ? 'walk' : 'idle'),
+      action: ecology?.needs?.health === 0 ? 'death' : (s.action ??
+        (Math.hypot(velocity.x, velocity.z) > 0.001 ? 'walk' : 'idle')),
       ...(s.actionOptions ? { actionOptions: structuredClone(s.actionOptions) } : {})
     };
   }
@@ -101,7 +113,7 @@ export class FaunaSystem {
         return { ...q, items: q.items.map((item) => ({ ...item, record: self.read(item.record.id) })) };
       },
       read: (id) => self.read(id),
-      diagnostics: () => ({ ...self.metrics }),
+      diagnostics: () => ({ ...self.metrics, ...self.ecology.diagnostics() }),
       population: () => ({
         total: self.records.size,
         missing: { ...self.population.missing },
