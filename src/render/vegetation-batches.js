@@ -8,13 +8,22 @@ export class VegetationBatches {
   constructor(scene, bank, materials) {
     Object.assign(this, { scene, bank, materials });
     this.chunks = new Map();
+    this.members = new Map(); // Only the chunks belonging to each 64 m batch.
     this.cells = new Map();
     this.dirty = new Set();
     this.rebuilds = 0;
   }
   setChunk(key, objects, distant, visible) {
-    this.chunks.set(key, { objects, distant, visible, cell: cellOf(key) });
-    this.dirty.add(cellOf(key));
+    const cell = cellOf(key);
+    const previous = this.chunks.get(key);
+    if (previous && previous.cell !== cell) {
+      this.members.get(previous.cell)?.delete(key);
+      this.dirty.add(previous.cell);
+    }
+    this.chunks.set(key, { objects, distant, visible, cell });
+    if (!this.members.has(cell)) this.members.set(cell, new Map());
+    this.members.get(cell).set(key, this.chunks.get(key));
+    this.dirty.add(cell);
   }
   setVisible(key, visible) {
     const chunk = this.chunks.get(key);
@@ -27,6 +36,8 @@ export class VegetationBatches {
     if (!chunk) return;
     this.dirty.add(chunk.cell);
     this.chunks.delete(key);
+    this.members.get(chunk.cell)?.delete(key);
+    if (!this.members.get(chunk.cell)?.size) this.members.delete(chunk.cell);
   }
   release(cell) {
     const group = this.cells.get(cell);
@@ -40,8 +51,8 @@ export class VegetationBatches {
     let rebuilt = 0;
     for (const cell of this.dirty) {
       const near = [], far = [];
-      for (const chunk of this.chunks.values()) {
-        if (chunk.cell === cell && chunk.visible) (chunk.distant ? far : near).push(...chunk.objects);
+      for (const chunk of this.members.get(cell)?.values() ?? []) {
+        if (chunk.visible) (chunk.distant ? far : near).push(...chunk.objects);
       }
       const group = new Group();
       const meshes = [...instances(near, this.bank, this.materials, false), ...instances(far, this.bank, this.materials, true)];
@@ -63,6 +74,7 @@ export class VegetationBatches {
   dispose() {
     for (const cell of this.cells.keys()) this.release(cell);
     this.chunks.clear();
+    this.members.clear();
     this.dirty.clear();
   }
 }
