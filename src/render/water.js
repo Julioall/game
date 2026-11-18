@@ -85,7 +85,7 @@ export function waterMaterial(clock) {
         // Crossfade overlapping phases: no unbounded stretching as river turns.
         float h = mix(texture2D(heightMap, uv - movement0).r,
           texture2D(heightMap, uv - movement1).r, phaseBlend) - .5;
-        vec2 offset = h * mix(.035, .004, lake * (1. - influence)) * view.xz / max(.35, abs(view.y));
+        vec2 offset = h * mix(.016, .002, lake * (1. - influence)) * view.xz / max(.35, abs(view.y));
         vec2 uv0 = uv - movement0 - offset, uv1 = uv - movement1 - offset;
         vec2 windUV = waterPosition.xz / 17. - vec2(.006, .0035) * time * mix(1., .12, lake);
         float albedo = mix(texture2D(albedo0, uv0).r, texture2D(albedo0, uv1).r, phaseBlend)
@@ -112,10 +112,10 @@ export function waterMaterial(clock) {
         vec3 fronts = vec3(0.);
         if (coastBand > .001 || beachFilm > .5) fronts = coastalFronts(p, coastDistance, time);
         waves = mix(waves, shoreward * fronts.y * 2.4, coastBand);
-        float waveStrength = mix(.006, .025 + coastBand * .12, sea) * (1. - influence * .78) * smoothstep(.02, .35, depth);
+        float waveStrength = mix(.003, .016 + coastBand * .07, sea) * (1. - influence * .78) * smoothstep(.02, .35, depth);
         vec2 across = vec2(-current.y, current.x);
-        vec2 streamNormal = current * combined.x * .09 + across * combined.y * .19;
-        vec2 slope = mix(combined.xy * mix(mix(.13, .035, sea), .009, lake), streamNormal, influence) + waves * waveStrength;
+        vec2 streamNormal = current * combined.x * .035 + across * combined.y * .075;
+        vec2 slope = mix(combined.xy * mix(mix(.075, .028, sea), .006, lake), streamNormal, influence) + waves * waveStrength;
         // Sparse local disturbances expand radially; no sustained lake current.
         vec2 basinCell = floor(p / 96.);
         float seed = fract(sin(dot(basinCell, vec2(127.1,311.7))) * 43758.5453);
@@ -129,14 +129,17 @@ export function waterMaterial(clock) {
         float mixing = transition.x * sin(clamp(transition.y, 0., 1.) * 3.14159265);
         // Two subtle lateral swirls and short interference ripples in the plume.
         slope += vec2(sin(p.y * 2.2 + time * 2.), cos(p.x * 2. - time * 1.7))
-          * mixing * .07 * (1. - abs(transition.z) * .5);
+          * mixing * .018 * (1. - abs(transition.z) * .5);
         vec3 normal = normalize(vec3(slope.x, 1., slope.y));
         float ringDistance = length(waterPosition.xz - ripple.xy);
         float ring = sin(ringDistance * 12. - ripple.z * 17.) * exp(-abs(ringDistance - ripple.z * 2.4) * 4.)
           * max(0., 1. - ripple.z) * ripple.w;
-        normal.xz += ring * .08;
+        normal = normalize(normal + vec3(ring * .025, 0., ring * .025));
         float fresnel = .02 + .98 * pow(1. - max(0., dot(normal, view)), 5.);
-        vec3 color = mix(shallowColor, deepColor, 1. - exp(-depth * .72));
+        // Freshwater and saltwater share geometry, but not optical absorption.
+        vec3 shallow = shallowColor * sea + vec3(.17,.30,.25) * lake + vec3(.25,.34,.22) * river;
+        vec3 deep = deepColor * sea + vec3(.045,.12,.12) * lake + vec3(.065,.17,.125) * river;
+        vec3 color = mix(shallow, deep, 1. - exp(-depth * .72));
         color = mix(color, shallowColor * .9, influence * (1. - river) * .16);
         color *= mix(mix(.84 + albedo * .6, .97 + albedo * .08, sea), .99 + albedo * .04, lake * (1. - influence));
         float shine = pow(max(0., dot(reflect(normalize(vec3(.5,-.8,.3)), normal), view)), 70.);
@@ -149,7 +152,7 @@ export function waterMaterial(clock) {
           min(1. - reflectionUV.x, 1. - reflectionUV.y)));
         vec3 reflectedScene = texture2D(lakeReflection, clamp(reflectionUV, .001, .999)).rgb;
         color = mix(color, reflectedScene, lake * (1. - influence * .8) * reflectionValid
-          * (.38 + fresnel * .4) * smoothstep(.05, .7, depth));
+          * (.19 + fresnel * .24) * smoothstep(.07, .8, depth));
         color += vec3(.7,.8,.72) * shine * mix(.36, .055 + coastBand * .12, sea);
         float crests = fronts.x * coastBand * (1. - influence * .75);
         float streaks = smoothstep(.18,.42,albedo) * smoothstep(.45,.95,
@@ -164,8 +167,8 @@ export function waterMaterial(clock) {
         foam += mixing * smoothstep(.24,.48,albedo) * .42;
         vec3 foamPalette = mix(vec3(.62,.78,.73), vec3(.94,.97,.91), crestSteps);
         color = mix(color, foamPalette, clamp(foam * mix(.55,.92,sea), 0., 1.));
-        float lakeEdge = .015 * sin(depth * 16. + time * .8);
-        float alpha = (1. - exp(-max(0., depth - lake * lakeEdge) * 1.6)) * .96;
+        // Alpha follows the physical bed, not a pulsing displacement band.
+        float alpha = (1. - exp(-max(0., depth) * .96)) * .96;
         // Deep sea is opaque: terrain/background differences must not expose
         // the rectangular join between in-map water and the outer ocean.
         alpha = mix(alpha, 1., sea * smoothstep(1.8, 4., depth));
