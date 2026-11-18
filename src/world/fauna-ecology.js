@@ -62,6 +62,7 @@ export class FaunaEcology {
     let patch = this.forage.get(key);
     if (!patch) {
       const capacity = 1.8 + hash(this.world.config.seed, Math.floor(x / 4), Math.floor(z / 4), 318) * 3.2;
+      if (consume <= 0) return capacity; // Queries never allocate terrain-wide resource records.
       patch = { capacity, amount: capacity, updated: now };
     }
     patch.amount = Math.min(patch.capacity, patch.amount + Math.max(0, now - patch.updated) * .006);
@@ -175,7 +176,7 @@ export class FaunaEcology {
     const profile = PROFILES[record.species];
     if (!profile || !intent) return;
     const s = this.state(record), n = s.needs;
-    if (distance(position, s) < .01 && !intent.stop) s.stuck++;
+    if (Math.hypot(position.x - s.lastX, position.z - s.lastZ) < .01 && !intent.stop) s.stuck++;
     else s.stuck = 0;
     s.lastX = position.x; s.lastZ = position.z;
     if (intent.goal === 'forage' && intent.stop) {
