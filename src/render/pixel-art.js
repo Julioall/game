@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { pixelArtProfile, harmonizedPaletteLut, PALETTE_LUT_STEPS } from './pixel-style.js';
 
 /** Shared pixel grid and color steps for every object in the world. */
 export class PixelArtPass {
@@ -9,6 +10,11 @@ export class PixelArtPass {
       depthBuffer: true
     });
     this.target.depthTexture = new T.DepthTexture(1, 1, T.UnsignedIntType);
+    this.paletteLut = new T.DataTexture(harmonizedPaletteLut(), 256, PALETTE_LUT_STEPS, T.RGBAFormat);
+    this.paletteLut.minFilter = T.NearestFilter;
+    this.paletteLut.magFilter = T.NearestFilter;
+    this.paletteLut.generateMipmaps = false;
+    this.paletteLut.needsUpdate = true;
     this.scene = new T.Scene();
     this.camera = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.material = new T.ShaderMaterial({
@@ -18,7 +24,10 @@ export class PixelArtPass {
         texel: { value: new T.Vector2(1, 1) },
         cameraNear: { value: 0.1 },
         cameraFar: { value: 480 },
-        perspective: { value: 0 }
+        perspective: { value: 0 },
+        paletteLut: { value: this.paletteLut },
+        edgeStrength: { value: .28 },
+        ditherStrength: { value: .018 }
       },
       depthTest: false,
       depthWrite: false,
@@ -26,6 +35,7 @@ export class PixelArtPass {
       vertexShader: `varying vec2 uvPixel; void main(){uvPixel=uv;gl_Position=vec4(position.xy,0.,1.);}`,
       fragmentShader: `uniform sampler2D source; uniform sampler2D sceneDepth;
       uniform vec2 texel; uniform float cameraNear,cameraFar,perspective;
+      uniform sampler2D paletteLut; uniform float edgeStrength,ditherStrength;
       varying vec2 uvPixel;
       float distanceAt(vec2 uv){
         float d=texture2D(sceneDepth,uv).x;
@@ -40,16 +50,26 @@ export class PixelArtPass {
                       max(distanceAt(uvPixel+vec2(0.,texel.y)),distanceAt(uvPixel-vec2(0.,texel.y))))-center;
         // A single colored edge on the foreground side; no black internal lines.
         float edge=smoothstep(max(.5,center*.018),max(.9,center*.03),gap);
-        gl_FragColor.rgb *= 1.-edge*.32;
+        gl_FragColor.rgb *= 1.-edge*edgeStrength;
         float ranks[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
         ivec2 cell=ivec2(mod(gl_FragCoord.xy,4.));
         float threshold=(ranks[cell.y*4+cell.x]+.5)/16.-.5;
-        vec3 levels=vec3(23.,27.,23.);
-        gl_FragColor.rgb=clamp(floor(gl_FragColor.rgb*levels+.5+threshold*.12)/levels,0.,1.);
+        // Ordered dithering is subtle and stays locked to the pixel grid.
+        // Darken only foreground-side depth breaks, avoiding heavy black ink.
+        vec3 color=clamp(gl_FragColor.rgb+threshold*ditherStrength,0.,1.);
+        vec3 indices=floor(color*15.+.5);
+        vec2 paletteUV=vec2((indices.r+16.*indices.g+.5)/256.,(indices.b+.5)/16.);
+        gl_FragColor.rgb=texture2D(paletteLut,paletteUV).rgb;
       }`
     });
     this.quad = new T.Mesh(new T.PlaneGeometry(2, 2), this.material);
     this.scene.add(this.quad);
+    this.setStyle('pixel');
+  }
+  setStyle(mode) {
+    const style = pixelArtProfile(mode);
+    this.material.uniforms.edgeStrength.value = style.edge;
+    this.material.uniforms.ditherStrength.value = style.dither;
   }
   resize(width, height) {
     this.target.setSize(width, height);
@@ -66,6 +86,7 @@ export class PixelArtPass {
   }
   dispose() {
     this.target.dispose();
+    this.paletteLut.dispose();
     this.quad.geometry.dispose();
     this.material.dispose();
   }

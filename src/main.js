@@ -244,6 +244,7 @@ function loadWorld(config, preferSaved = true) {
       view?.destroy();
       view = null;
       view = new WorldView(canvas, presentation, { baseline: initialParams.get('qa') === '1' && initialParams.get('renderBaseline') === '1' });
+      view.setPixelArtMode($('pixel-art-style').value);
       faunaStartupDeadline = performance.now() + 3000;
       view.showWalkways($('walkways').getAttribute('aria-pressed') === 'true');
       lostContext = false;
@@ -454,6 +455,7 @@ $('diagnose').onclick = () => {
   if (view) refresh();
 };
 $('layer').onchange = () => { if (view) image = mapImage(map, view.world, $('layer').value); };
+$('pixel-art-style').onchange = event => view?.setPixelArtMode(event.target.value);
 $('walkways').onclick = () => {
   const button = $('walkways');
   const enabled = button.getAttribute('aria-pressed') !== 'true';

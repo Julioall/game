@@ -1,6 +1,7 @@
 import { seaBeachDistance, seaShoreDistance } from './coast.js';
 import { PixelArtPass } from './pixel-art.js';
 import { renderResolution } from './resolution.js';
+import { pixelArtResolution, overviewFogFar, PIXEL_ART_MODES } from './pixel-style.js';
 import * as T from 'three';
 import { CHUNK, SPECIES } from '../world/catalog.js';
 import { crownOverlaps } from '../world/audit.js';
@@ -68,6 +69,7 @@ export class WorldView {
     this.renderer.outputColorSpace = T.SRGBColorSpace;
     this.renderer.info.autoReset = false;
     this.pixelArt = new PixelArtPass();
+    this.pixelArtMode = 'pixel';
     this.camera = new T.OrthographicCamera(-1, 1, 1, -1, .1, 480);
     const town = world.towns[0];
     this.home = { x: town?.x ?? world.config.size * .5, z: town?.z ?? world.config.size * .52, span: 43 };
@@ -123,13 +125,22 @@ export class WorldView {
 
   updateResolution() {
     const width = this.canvas.clientWidth || innerWidth, height = this.canvas.clientHeight || innerHeight;
-    const target = renderResolution(this.world.config.detail, this.focus.span, width, height, Boolean(this.firstPerson), this.gpuBudget.cap);
+    const target = this.pixelArtMode === 'off'
+      ? renderResolution(this.world.config.detail, this.focus.span, width, height, Boolean(this.firstPerson), this.gpuBudget.cap)
+      : pixelArtResolution(width, height, this.pixelArtMode);
     if (this.renderWidth === target.width && this.renderHeight === target.height) return;
     this.renderer.setSize(target.width, target.height, false);
     this.pixelArt.resize(target.width, target.height);
     this.renderWidth = target.width;
     this.renderHeight = target.height;
     this.pixelScale = target.scale;
+  }
+
+  setPixelArtMode(mode) {
+    if (!Object.hasOwn(PIXEL_ART_MODES, mode) || this.pixelArtMode === mode) return;
+    this.pixelArtMode = mode;
+    this.pixelArt.setStyle(mode);
+    this.updateResolution();
   }
 
   showTraveler(actor) {
@@ -213,6 +224,12 @@ export class WorldView {
       shadowFocus.set(sx, sy, sz);
       this.sun.position.set(sx - 45, sy + 70, sz - 24);
       this.renderer.shadowMap.needsUpdate = true;
+    }
+    // The overhead view keeps just 30% of the previous fog contribution.
+    // First-person visibility stays as it was.
+    if (this.scene.fog?.isFog) {
+      this.scene.fog.near = 250;
+      this.scene.fog.far = this.firstPerson ? 403 : overviewFogFar(250, 403, 0.3);
     }
     const camera = this.camera;
     if (this.firstPerson) {
@@ -384,7 +401,8 @@ export class WorldView {
     this.renderer.info.reset();
     this.gpuTimer.begin();
     this.waterReflections.update(this.renderer, this.scene, this.camera, this.world, this.focus, performance.now());
-    this.pixelArt.render(this.renderer, this.scene, this.camera);
+    if (this.pixelArtMode === 'off') this.renderer.render(this.scene, this.camera);
+    else this.pixelArt.render(this.renderer, this.scene, this.camera);
     this.gpuTimer.end();
     if (this.firstFrameMs === null) this.firstFrameMs = performance.now() - this.startedAt;
     const cpuMs = performance.now() - cpuStarted;
@@ -434,7 +452,7 @@ export class WorldView {
       .filter(o => !this.projection.isRemoved(o.id));
     return { active: this.near.filter(c => this.chunks.has(c.key)).length, desired: this.near.length,
       cached: this.chunks.size, calls: render.calls, triangles: render.triangles,
-      geometries: memory.geometries, renderWidth: this.renderWidth, renderHeight: this.renderHeight, pixelScale: this.pixelScale,
+      geometries: memory.geometries, renderWidth: this.renderWidth, renderHeight: this.renderHeight, pixelScale: this.pixelScale, pixelArtMode: this.pixelArtMode,
       gpuMs: this.gpuTimer.average(), renderCpuMs: this.renderCpuMs ?? 0, gpuDensityCap: this.gpuBudget.cap,
       worldGenerationMs: this.world.metrics?.generationMs ?? null, firstFrameMs: this.firstFrameMs,
       ...this.frameMetrics.snapshot(),

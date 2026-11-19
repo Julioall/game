@@ -7,6 +7,13 @@ import { floraClimateAt } from './flora-climate.js';
 
 const pitch = 3.35;
 
+// Expected 70% grass reduction, chosen independently of vegetation content.
+// Coordinates and streams keep the remaining plants stable across chunk loads.
+export const GRASS_DENSITY = 0.3;
+export function keepGrass(seed, px, pz, stream) {
+  return hash(seed, px, pz, stream) < GRASS_DENSITY;
+}
+
 function resourceCoordinate(seed, gx, gz, stream, cell) {
   return (cell + .38 + hash(seed, gx, gz, stream) * .24) * pitch;
 }
@@ -151,6 +158,7 @@ export function chunkObjects(world, townIndex, cx, cz, { resourcesOnly = false }
       const placements = [[], [], []];
       const probability = config.vegetation * .8 * (.35 + patch * .9);
       for (let plant = 0; plant < 30; plant++) {
+        if (!keepGrass(config.seed, px, pz, 3071 + plant)) continue;
         if (hash(config.seed, px, pz, 1104 + plant * 6) >= probability) continue;
         const gx = px + hash(config.seed, px, pz, 1100 + plant * 6);
         const gz = pz + hash(config.seed, px, pz, 1101 + plant * 6);
@@ -186,13 +194,16 @@ export function chunkObjects(world, townIndex, cx, cz, { resourcesOnly = false }
     if (snowyWood || !snowCover && shore > 2 && [2, 3, 4, 10, 11].includes(type) &&
       hash(config.seed, px, pz, 48) < .0002)
       kind = hash(config.seed, px, pz, 49) < .5 ? 'stump' : 'log';
-    objects.push({ id: 'p:' + px + ':' + pz, kind, biome: type, x, z, y: gridSample(ground, stride, x, z),
-      scale: .55 + hash(config.seed, px, pz, 44) * .72,
-      variant: Math.floor(hash(config.seed, px, pz, 45) * 5), rotation: h * 87 });
+    if (kind !== 'grass' || keepGrass(config.seed, px, pz, 3041)) {
+      objects.push({ id: 'p:' + px + ':' + pz, kind, biome: type, x, z, y: gridSample(ground, stride, x, z),
+        scale: .55 + hash(config.seed, px, pz, 44) * .72,
+        variant: Math.floor(hash(config.seed, px, pz, 45) * 5), rotation: h * 87 });
+    }
     // Separate grass plants, each placed and validated on the terrain.
     if (kind === 'grass' && (type === 3 || type === 4)) {
       const plants = 1 + Math.floor(patch * 18);
       for (let tuft = 1; tuft < plants; tuft++) {
+        if (!keepGrass(config.seed, px, pz, 3072 + tuft)) continue;
         const tx = px + hash(config.seed, px, pz, 860 + tuft * 3);
         const tz = pz + hash(config.seed, px, pz, 861 + tuft * 3);
         const ti = sample(tx, tz);
