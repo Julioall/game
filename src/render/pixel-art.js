@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { pixelArtProfile } from './pixel-style.js';
 
 /** Shared pixel grid and color steps for every object in the world. */
 export class PixelArtPass {
@@ -18,7 +19,10 @@ export class PixelArtPass {
         texel: { value: new T.Vector2(1, 1) },
         cameraNear: { value: 0.1 },
         cameraFar: { value: 480 },
-        perspective: { value: 0 }
+        perspective: { value: 0 },
+        paletteLevels: { value: new T.Vector3(15, 17, 15) },
+        edgeStrength: { value: 0.42 },
+        ditherStrength: { value: 0.18 }
       },
       depthTest: false,
       depthWrite: false,
@@ -26,6 +30,7 @@ export class PixelArtPass {
       vertexShader: `varying vec2 uvPixel; void main(){uvPixel=uv;gl_Position=vec4(position.xy,0.,1.);}`,
       fragmentShader: `uniform sampler2D source; uniform sampler2D sceneDepth;
       uniform vec2 texel; uniform float cameraNear,cameraFar,perspective;
+      uniform vec3 paletteLevels; uniform float edgeStrength,ditherStrength;
       varying vec2 uvPixel;
       float distanceAt(vec2 uv){
         float d=texture2D(sceneDepth,uv).x;
@@ -40,16 +45,22 @@ export class PixelArtPass {
                       max(distanceAt(uvPixel+vec2(0.,texel.y)),distanceAt(uvPixel-vec2(0.,texel.y))))-center;
         // A single colored edge on the foreground side; no black internal lines.
         float edge=smoothstep(max(.5,center*.018),max(.9,center*.03),gap);
-        gl_FragColor.rgb *= 1.-edge*.32;
+        gl_FragColor.rgb *= 1.-edge*edgeStrength;
         float ranks[16]=float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
         ivec2 cell=ivec2(mod(gl_FragCoord.xy,4.));
         float threshold=(ranks[cell.y*4+cell.x]+.5)/16.-.5;
-        vec3 levels=vec3(23.,27.,23.);
-        gl_FragColor.rgb=clamp(floor(gl_FragColor.rgb*levels+.5+threshold*.12)/levels,0.,1.);
+        gl_FragColor.rgb=clamp(floor(gl_FragColor.rgb*paletteLevels+.5+threshold*ditherStrength)/paletteLevels,0.,1.);
       }`
     });
     this.quad = new T.Mesh(new T.PlaneGeometry(2, 2), this.material);
     this.scene.add(this.quad);
+    this.setStyle('pixel');
+  }
+  setStyle(mode) {
+    const style = pixelArtProfile(mode);
+    this.material.uniforms.paletteLevels.value.set(...style.levels);
+    this.material.uniforms.edgeStrength.value = style.edge;
+    this.material.uniforms.ditherStrength.value = style.dither;
   }
   resize(width, height) {
     this.target.setSize(width, height);
